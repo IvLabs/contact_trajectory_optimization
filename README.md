@@ -1,2 +1,2 @@
-# contact_trajectory_optimization
+# Contact trajectory Optimization
 Implementations for Trajectory Optimization of Rigid Bodies Through Contact
