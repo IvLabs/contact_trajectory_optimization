@@ -33,7 +33,19 @@ class FingerContact:
 
         self.visualize()
 
-    # def simulate(self):
+    def __setKinematics__(self):
+        q  = ca.MX.sym( 'q', 3, 1)
+        dq = ca.MX.sym('dq', 3, 1)
+
+        x = ca.MX.zeros(2, 2)
+        x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0]*ca.cos(q[0]), self.arm['origin'][1] - self.arm['length'][0]*ca.sin(q[0])
+        x[0, 1], x[1, 1] = x[0, 0] - self.arm['length'][1]*ca.cos(q[0] + q[1]), x[1, 0] - self.arm['length'][1]*ca.sin(q[0] + q[1])
+
+        dx = ca.jtimes(x, q, dq)
+        
+        self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx], ['q', 'dq'], ['x', 'dx'])
+
+    def __setDynamics__(self):
 
     def visualize(self):
         time_template = 'time = %.1fs'
