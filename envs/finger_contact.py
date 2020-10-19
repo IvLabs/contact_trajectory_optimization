@@ -12,6 +12,8 @@ class FingerContact:
         super().__init__()
         self.render = False
         self.dof = 3
+        self.n_contact = 1
+
         self.arm = {'mass': np.array([0.3, 0.3, 0.3]).reshape((3, 1)),
                     'length': np.array([1.2, 1.2]).reshape((2, 1)),
                     'origin': np.zeros((2, 1))}
@@ -38,6 +40,7 @@ class FingerContact:
         q = ca.SX.sym('q', self.dof, 1)
         dq = ca.SX.sym('dq', self.dof, 1)
         ddq = ca.SX.sym('ddq', self.dof, 1)
+        lam = ca.SX.sym('lambda', 2, self.n_contact)
 
         x = ca.SX.zeros(2, 3)
         x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0] * ca.cos(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.sin(q[0])
@@ -78,7 +81,17 @@ class FingerContact:
         B = ca.diag(ca.SX([1, 1, 0]))
 
         # For external force
-        self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da], ['q', 'dq'], ['x', 'dx', 'a', 'da'])
+        A = (((x[0, 1] - self.free_ellipse['center'][0])*ca.cos(q[2]) +
+              (x[1, 1] - self.free_ellipse['center'][1])*ca.sin(q[2])) / self.free_ellipse['axis'][0]) ** 2
+        B = (((x[0, 1] - self.free_ellipse['center'][0])*ca.sin(q[2]) -
+              (x[1, 1] - self.free_ellipse['center'][1])*ca.cos(q[2])) / self.free_ellipse['axis'][1]) ** 2
+        phi = A + B - 1
+        J_phi = ca.jacobian(phi, q)
+
+        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
+                                            ['q', 'dq', 'lam'], ['H', 'C', 'B', 'da'])
+        self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
+                                            ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
     def visualize(self):
         time_template = 'time = %.1fs'
