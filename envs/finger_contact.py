@@ -31,35 +31,39 @@ class FingerContact:
         self.ax.set_ylim([-4, 4])
         self.ax.grid()
 
-        self.visualize()
+        # self.visualize()
+        self.__setPhysics__()
 
     def __setPhysics__(self):
-        q = ca.MX.sym('q', 3, 1)
-        dq = ca.MX.sym('dq', 3, 1)
-        ddq = ca.MX.sym('ddq', 3, 1)
+        q = ca.MX.sym('q', self.dof, 1)
+        dq = ca.MX.sym('dq', self.dof, 1)
+        ddq = ca.MX.sym('ddq', self.dof, 1)
 
         x = ca.MX.zeros(2, 3)
-        x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0] * ca.cos(q[0]), self.arm['origin'][1] - \
-                           self.arm['length'][0] * ca.sin(q[0])
-        x[0, 1], x[1, 1] = x[0, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1]), x[1, 0] - self.arm['length'][
-            1] * ca.sin(q[0] + q[1])
+        x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0] * ca.cos(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.sin(q[0])
+        x[0, 1], x[1, 1] = x[0, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1]), x[1, 0] - self.arm['length'][1] * ca.sin(q[0] + q[1])
         x[0, 2], x[1, 2] = self.free_ellipse['center'][0], self.free_ellipse['center'][1]
 
+        temp = ca.DM.ones(ca.Sparsity.diag(3)); temp[1, 0] = 1
+        a = ca.reshape(temp @ q, 1, 3)
+
         dx = ca.jtimes(x, q, dq)
+        da = ca.jtimes(a, q, dq)
+
         H = ca.MX.zeros(3, 3)
         for i in range(self.dof):
+            J_l = ca.jacobian((x[:, i]), q)
+            J_a = ca.jacobian(a[:, i], q).T
+            I = ca.MX.zeros(3, 3)
+
             if i < self.dof - 1:
-                J_l = ca.jacobian(x[:, i], q)
-                J_a = ca.MX.zeros(3, self.dof)
-                J_a[2, :] = ca.MX([1 if j <= i else 0 for j in range(self.dof)])
-                I = ca.MX.zeros(3, 3)
-                I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2
-                H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
-            # else:
+                I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2  # Rod
+            else:
+                I[2, 2] = (1 / 4) * self.arm['mass'][i] * np.sum(self.free_ellipse['axis'] ** 2)  # Ellipse
 
-        self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx], ['q', 'dq'], ['x', 'dx'])
+            H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
 
-        H = ca.MX.zeros((3, 3))
+        self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da], ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
     def visualize(self):
         time_template = 'time = %.1fs'
