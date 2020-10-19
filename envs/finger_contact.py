@@ -74,6 +74,10 @@ class FingerContact:
                     sum_ += c_ijk @ dq[j] @ dq[k]
                 C[i, j] = sum_
 
+        # For B matrix
+        B = ca.diag(ca.SX([1, 1, 0]))
+
+        # For external force
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da], ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
     def visualize(self):
