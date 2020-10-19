@@ -67,7 +67,7 @@ class FingerContact:
 
             H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
 
-        # For coriolis matrix
+        # For coriolis + centrifugal matrix
         C = ca.SX.zeros(self.dof, self.dof)
         for i in range(self.dof):
             for j in range(self.dof):
