@@ -35,11 +35,11 @@ class FingerContact:
         self.__setPhysics__()
 
     def __setPhysics__(self):
-        q = ca.MX.sym('q', self.dof, 1)
-        dq = ca.MX.sym('dq', self.dof, 1)
-        ddq = ca.MX.sym('ddq', self.dof, 1)
+        q = ca.SX.sym('q', self.dof, 1)
+        dq = ca.SX.sym('dq', self.dof, 1)
+        ddq = ca.SX.sym('ddq', self.dof, 1)
 
-        x = ca.MX.zeros(2, 3)
+        x = ca.SX.zeros(2, 3)
         x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0] * ca.cos(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.sin(q[0])
         x[0, 1], x[1, 1] = x[0, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1]), x[1, 0] - self.arm['length'][1] * ca.sin(q[0] + q[1])
         x[0, 2], x[1, 2] = self.free_ellipse['center'][0], self.free_ellipse['center'][1]
@@ -50,11 +50,12 @@ class FingerContact:
         dx = ca.jtimes(x, q, dq)
         da = ca.jtimes(a, q, dq)
 
-        H = ca.MX.zeros(3, 3)
+        # For inertia matrix
+        H = ca.SX.zeros(self.dof, self.dof)
         for i in range(self.dof):
             J_l = ca.jacobian((x[:, i]), q)
             J_a = ca.jacobian(a[:, i], q).T
-            I = ca.MX.zeros(3, 3)
+            I = ca.SX.zeros(3, 3)
 
             if i < self.dof - 1:
                 I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2  # Rod
@@ -62,6 +63,16 @@ class FingerContact:
                 I[2, 2] = (1 / 4) * self.arm['mass'][i] * np.sum(self.free_ellipse['axis'] ** 2)  # Ellipse
 
             H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
+
+        # For coriolis matrix
+        C = ca.SX.zeros(self.dof, self.dof)
+        for i in range(self.dof):
+            for j in range(self.dof):
+                sum_ = 0
+                for k in range(self.dof):
+                    c_ijk = ca.jacobian(H[i, j], q[k]) - (1/2)*ca.jacobian(H[j, k], q[i])
+                    sum_ += c_ijk @ dq[j] @ dq[k]
+                C[i, j] = sum_
 
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da], ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
