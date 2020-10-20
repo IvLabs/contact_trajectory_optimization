@@ -1,10 +1,11 @@
+"""Finger Contact environment as given in
+- Stochastic Complementarity for Local Control of Discontinuous Dynamics"""
+
 import casadi as ca
 import numpy as np
 from matplotlib import patches as pch
 from matplotlib import pyplot as plt
 from matplotlib import animation
-
-"Finger Contact environment as given in - Stochastic Complementarity for Local Control of Discontinuous Dynamics"
 
 
 class FingerContact:
@@ -92,6 +93,9 @@ class FingerContact:
                                             ['q', 'dq', 'lam'], ['H', 'C', 'B', 'da'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                             ['q', 'dq'], ['x', 'dx', 'a', 'da'])
+
+    def __setOptimizationParams__(self, total_duration):
+        self.T = total_duration
 
     def visualize(self):
         time_template = 'time = %.1fs'
