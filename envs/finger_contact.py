@@ -25,12 +25,12 @@ class FingerContact:
                             'radius': np.array([0.5]).reshape((1, 1))}  # minor and major axis length of ellipse
 
         self.gravity_vector = np.array([0, 10]).reshape((2, 1))
-
-        # self.dt = 0.05
+        self.mu = 1.
+        self.dt = 0.1
 
         self.state = np.array([(180/np.pi)*45, -(180/np.pi)*3, 0]).reshape((3, 1))
 
-        self.visualize()
+        # self.visualize()
         self.__setPhysics__()
 
     def __setPhysics__(self):
@@ -154,4 +154,4 @@ class FingerContact:
         plt.show()
 
 
-model = FingerContact()
+# model = FingerContact()
