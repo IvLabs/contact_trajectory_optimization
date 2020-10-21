@@ -21,16 +21,16 @@ class FingerContact:
                     'length': np.array([1.2, 1.2]).reshape((2, 1)),
                     'origin': np.zeros((2, 1))}
 
-        self.free_ellipse = {'center': np.array([0., -2.]).reshape((2, 1)),  # com of ellipse
-                             'axis': np.array([2.5, 1]).reshape((2, 1))}  # minor and major axis length of ellipse
+        self.free_circle = {'center': np.array([0., -2.]).reshape((2, 1)),  # com of ellipse
+                            'radius': np.array([0.5]).reshape((1, 1))}  # minor and major axis length of ellipse
 
         self.gravity_vector = np.array([0, 10]).reshape((2, 1))
 
         # self.dt = 0.05
 
-        self.state = np.array([2 * np.pi / 3, -np.pi / 3, 0]).reshape((3, 1))
+        self.state = np.array([(180/np.pi)*45, -(180/np.pi)*3, 0]).reshape((3, 1))
 
-        # self.visualize()
+        self.visualize()
         self.__setPhysics__()
 
     def __setPhysics__(self):
@@ -42,7 +42,7 @@ class FingerContact:
         x = ca.SX.zeros(2, 3)
         x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0] * ca.cos(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.sin(q[0])
         x[0, 1], x[1, 1] = x[0, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1]), x[1, 0] - self.arm['length'][1] * ca.sin(q[0] + q[1])
-        x[0, 2], x[1, 2] = self.free_ellipse['center'][0], self.free_ellipse['center'][1]
+        x[0, 2], x[1, 2] = self.free_circle['center'][0], self.free_circle['center'][1]
 
         temp = ca.DM.ones(ca.Sparsity.diag(3)); temp[1, 0] = 1
         a = ca.reshape(temp @ q, 1, 3)
@@ -60,7 +60,7 @@ class FingerContact:
             if i < self.n_joints - 1:
                 I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2  # Rod
             else:
-                I[2, 2] = (1 / 4) * self.arm['mass'][i] * np.sum(self.free_ellipse['axis'] ** 2)  # Ellipse
+                I[2, 2] = (1 / 2) * self.arm['mass'][i] * np.sum(self.free_circle['radius'] ** 2)  # Ellipse
 
             H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
 
@@ -79,7 +79,6 @@ class FingerContact:
         B[0, 0], B[1, 1] = 1, 1
 
         # For external force
-        g = ca.Function('g', [q], [])
         # A = (((x[0, 1] - self.free_ellipse['center'][0])*ca.cos(q[2]) +
         #       (x[1, 1] - self.free_ellipse['center'][1])*ca.sin(q[2])) / self.free_ellipse['axis'][0]) ** 2
         # B = (((x[0, 1] - self.free_ellipse['center'][0])*ca.sin(q[2]) -
@@ -88,8 +87,8 @@ class FingerContact:
         # print(phi.shape)
         # J_phi = ca.jacobian(phi, q)
         # print(J_phi.shape)
-        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
-                                            ['q', 'dq', 'lam'], ['H', 'C', 'B', 'phi', 'J_phi'])
+        # self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
+        #                                     ['q', 'dq', 'lam'], ['H', 'C', 'B', 'phi', 'J_phi'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                             ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
@@ -108,20 +107,19 @@ class FingerContact:
         link_2, = self.ax.plot([], [], '-', lw=5, color='blue')
         finger_tip, = self.ax.plot([], [], 'o', lw=2, color='blue')
 
-        anchor_ellipse, = self.ax.plot([], [], '+', lw=2, color='black')
-        ellipse = pch.Ellipse(xy=self.free_ellipse['center'], width=self.free_ellipse['axis'][0],
-                              height=self.free_ellipse['axis'][1], angle=(self.state[2]) * (180 / np.pi) + 180)
-        ellipse.set_facecolor([0, 1, 0])
+        anchor_circle, = self.ax.plot([], [], '+', lw=1, color='black')
+        circle = pch.Circle(xy=self.free_circle['center'], radius=self.free_circle['radius'])
+        circle.set_facecolor([0, 1, 0])
 
         def init():
             link_1.set_data([], [])
             link_2.set_data([], [])
             anchor_arm.set_data([], [])
-            anchor_ellipse.set_data([], [])
+            anchor_circle.set_data([], [])
             finger_tip.set_data([], [])
             time_text.set_text('')
-            self.ax.add_patch(ellipse)
-            return link_1, link_2, anchor_arm, anchor_ellipse, finger_tip, time_text, ellipse,
+            self.ax.add_patch(circle)
+            return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
 
         def animate(i):
             line1_x = [self.arm['origin'][0], self.arm['origin'][0] - np.cos(self.state[0]) * self.arm['length'][0]]
@@ -135,17 +133,16 @@ class FingerContact:
             anchor_arm.set_data([self.arm['origin'][0], self.arm['origin'][0]],
                                 [self.arm['origin'][1], self.arm['origin'][1]])
 
-            anchor_ellipse.set_data([self.free_ellipse['center'][0], self.free_ellipse['center'][0]],
-                                    [self.free_ellipse['center'][1], self.free_ellipse['center'][1]])
+            anchor_circle.set_data([self.free_circle['center'][0], self.free_circle['center'][0] + np.cos(self.state[2])*self.free_circle['radius']],
+                                   [self.free_circle['center'][1], self.free_circle['center'][1] + np.sin(self.state[2])*self.free_circle['radius']])
 
             finger_tip.set_data([line2_x[1], line2_x[1]],
                                 [line2_y[1], line2_y[1]])
 
-            time_text.set_text(time_template % (i * self.dt))
-            ellipse.center = self.free_ellipse['center']
-            self.ax.add_artist(ellipse)
+            time_text.set_text(time_template % (i * 0.05))
+            self.ax.add_artist(circle)
             # print('yes')
-            return link_1, link_2, anchor_arm, anchor_ellipse, finger_tip, time_text, ellipse,
+            return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
 
         self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, 10),
                                            interval=25)  # np.arrange for running in loop so that (i) in animate does not cross the len of x
