@@ -12,8 +12,10 @@ class FingerContact:
     def __init__(self):
         super().__init__()
         self.render = False
-        self.dof = 3
+        self.n_joints = 3
         self.n_contact = 1
+        self.dof = 2
+        self.dims = 2
 
         self.arm = {'mass': np.array([0.3, 0.3, 0.3]).reshape((3, 1)),
                     'length': np.array([1.2, 1.2]).reshape((2, 1)),
@@ -24,23 +26,17 @@ class FingerContact:
 
         self.gravity_vector = np.array([0, 10]).reshape((2, 1))
 
-        self.dt = 0.05
+        # self.dt = 0.05
 
         self.state = np.array([2 * np.pi / 3, -np.pi / 3, 0]).reshape((3, 1))
-
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111, aspect='equal')
-        self.ax.set_xlim([-4, 4])
-        self.ax.set_ylim([-4, 4])
-        self.ax.grid()
 
         # self.visualize()
         self.__setPhysics__()
 
     def __setPhysics__(self):
-        q = ca.SX.sym('q', self.dof, 1)
-        dq = ca.SX.sym('dq', self.dof, 1)
-        ddq = ca.SX.sym('ddq', self.dof, 1)
+        q = ca.SX.sym('q', self.n_joints, 1)
+        dq = ca.SX.sym('dq', self.n_joints, 1)
+        ddq = ca.SX.sym('ddq', self.n_joints, 1)
         lam = ca.SX.sym('lambda', 2, self.n_contact)
 
         x = ca.SX.zeros(2, 3)
@@ -55,13 +51,13 @@ class FingerContact:
         da = ca.jtimes(a, q, dq)
 
         # For inertia matrix
-        H = ca.SX.zeros(self.dof, self.dof)
-        for i in range(self.dof):
+        H = ca.SX.zeros(self.n_joints, self.n_joints)
+        for i in range(self.n_joints):
             J_l = ca.jacobian((x[:, i]), q)
             J_a = ca.jacobian(a[:, i], q).T
             I = ca.SX.zeros(3, 3)
 
-            if i < self.dof - 1:
+            if i < self.n_joints - 1:
                 I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2  # Rod
             else:
                 I[2, 2] = (1 / 4) * self.arm['mass'][i] * np.sum(self.free_ellipse['axis'] ** 2)  # Ellipse
@@ -69,35 +65,41 @@ class FingerContact:
             H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
 
         # For coriolis + centrifugal matrix
-        C = ca.SX.zeros(self.dof, self.dof)
-        for i in range(self.dof):
-            for j in range(self.dof):
+        C = ca.SX.zeros(self.n_joints, self.n_joints)
+        for i in range(self.n_joints):
+            for j in range(self.n_joints):
                 sum_ = 0
-                for k in range(self.dof):
+                for k in range(self.n_joints):
                     c_ijk = ca.jacobian(H[i, j], q[k]) - (1/2)*ca.jacobian(H[j, k], q[i])
                     sum_ += c_ijk @ dq[j] @ dq[k]
                 C[i, j] = sum_
 
         # For B matrix
-        B = ca.diag(ca.SX([1, 1, 0]))
+        B = ca.SX.zeros(self.n_joints, self.dof)
+        B[0, 0], B[1, 1] = 1, 1
 
         # For external force
-        A = (((x[0, 1] - self.free_ellipse['center'][0])*ca.cos(q[2]) +
-              (x[1, 1] - self.free_ellipse['center'][1])*ca.sin(q[2])) / self.free_ellipse['axis'][0]) ** 2
-        B = (((x[0, 1] - self.free_ellipse['center'][0])*ca.sin(q[2]) -
-              (x[1, 1] - self.free_ellipse['center'][1])*ca.cos(q[2])) / self.free_ellipse['axis'][1]) ** 2
-        phi = A + B - 1
-        J_phi = ca.jacobian(phi, q)
-
+        g = ca.Function('g', [q], [])
+        # A = (((x[0, 1] - self.free_ellipse['center'][0])*ca.cos(q[2]) +
+        #       (x[1, 1] - self.free_ellipse['center'][1])*ca.sin(q[2])) / self.free_ellipse['axis'][0]) ** 2
+        # B = (((x[0, 1] - self.free_ellipse['center'][0])*ca.sin(q[2]) -
+        #       (x[1, 1] - self.free_ellipse['center'][1])*ca.cos(q[2])) / self.free_ellipse['axis'][1]) ** 2
+        # phi = A + B - 1
+        # print(phi.shape)
+        # J_phi = ca.jacobian(phi, q)
+        # print(J_phi.shape)
         self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
-                                            ['q', 'dq', 'lam'], ['H', 'C', 'B', 'da'])
+                                            ['q', 'dq', 'lam'], ['H', 'C', 'B', 'phi', 'J_phi'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                             ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
-    def __setOptimizationParams__(self, total_duration):
-        self.T = total_duration
-
     def visualize(self):
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, aspect='equal')
+        self.ax.set_xlim([-4, 4])
+        self.ax.set_ylim([-4, 4])
+        self.ax.grid()
+
         time_template = 'time = %.1fs'
         time_text = self.ax.text(0.05, 0.9, '', transform=self.ax.transAxes)
 
