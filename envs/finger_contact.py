@@ -79,16 +79,19 @@ class FingerContact:
         B[0, 0], B[1, 1] = 1, 1
 
         # For external force
+        theta = ca.atan2(x[0, 1], x[1, 1])
+        p = ca.SX.zeros(2, 1)
+        p[0, 0], p[1, 0] = self.free_circle['radius']*ca.cos(theta), self.free_circle['radius']*ca.sin(theta)
         # A = (((x[0, 1] - self.free_ellipse['center'][0])*ca.cos(q[2]) +
         #       (x[1, 1] - self.free_ellipse['center'][1])*ca.sin(q[2])) / self.free_ellipse['axis'][0]) ** 2
         # B = (((x[0, 1] - self.free_ellipse['center'][0])*ca.sin(q[2]) -
         #       (x[1, 1] - self.free_ellipse['center'][1])*ca.cos(q[2])) / self.free_ellipse['axis'][1]) ** 2
-        # phi = A + B - 1
+        phi = x[:, 1] - p
         # print(phi.shape)
-        # J_phi = ca.jacobian(phi, q)
+        J_phi = ca.jacobian(phi, q)
         # print(J_phi.shape)
-        # self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
-        #                                     ['q', 'dq', 'lam'], ['H', 'C', 'B', 'phi', 'J_phi'])
+        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
+                                            ['q', 'dq', 'lam'], ['H', 'C', 'B', 'phi', 'J_phi'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                             ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
