@@ -77,12 +77,12 @@ class NLP:
             self.opti.subject_to(gam_1 - psi_1 >= 0)
             self.opti.subject_to(f_1['phi'].T @ lam_1_z == 0)
             self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z == 0)
-            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp == 0)
-            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm == 0)
+            # self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp == 0)
+            # self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm == 0)
 
             # bounds model specific
-            self.opti.subject_to(ca.fabs(q_1) <= np.pi)
-            self.opti.subject_to(ca.fabs(q_2) <= np.pi)
+            # self.opti.subject_to(ca.fabs(q_1) <= np.pi)
+            # self.opti.subject_to(ca.fabs(q_2) <= np.pi)
 
     def __setCosts__(self):
         Q = ca.diag(ca.MX([0, 0, 1]))
