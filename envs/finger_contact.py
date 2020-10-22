@@ -17,14 +17,14 @@ class FingerContact:
         self.dof = 2
         self.dims = 2
 
-        self.arm = {'mass': np.array([0.3, 0.3, 0.3]).reshape((3, 1)),
-                    'length': np.array([1.2, 1.2]).reshape((2, 1)),
+        self.arm = {'mass': np.array([3, 0.3, 0.3]).reshape((3, 1)),
+                    'length': np.array([1.3, 1.3]).reshape((2, 1)),
                     'origin': np.zeros((2, 1))}
 
         self.free_circle = {'center': np.array([0., -2.]).reshape((2, 1)),  # com of ellipse
                             'radius': np.array([0.5]).reshape((1, 1))}  # minor and major axis length of ellipse
 
-        self.gravity_vector = np.array([0, 10]).reshape((2, 1))
+        self.gravity = -9.81
         self.mu = 1.
         self.dt = 0.1
 
@@ -74,6 +74,10 @@ class FingerContact:
                     sum_ += c_ijk @ dq[j] @ dq[k]
                 C[i, j] = sum_
 
+        # For G matrix
+        V = self.arm['mass'] * self.gravity * ca.reshape(x[1, :], 3, 1)
+        G = ca.diag(ca.jacobian(V, q))
+
         # For B matrix
         B = ca.SX.zeros(self.n_joints, self.dof)
         B[0, 0], B[1, 1] = 1, 1
@@ -90,12 +94,12 @@ class FingerContact:
         # print(phi.shape)
         J_phi = ca.jacobian(phi, q)
         # print(J_phi.shape)
-        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, B, phi, J_phi],
-                                            ['q', 'dq', 'lam'], ['H', 'C', 'B', 'phi', 'J_phi'])
+        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_phi],
+                                            ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_phi'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                             ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
-    def visualize(self):
+    def visualize(self, x1, x2, x3, t):
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, aspect='equal')
         self.ax.set_xlim([-4, 4])
@@ -125,10 +129,10 @@ class FingerContact:
             return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
 
         def animate(i):
-            line1_x = [self.arm['origin'][0], self.arm['origin'][0] - np.cos(self.state[0]) * self.arm['length'][0]]
-            line1_y = [self.arm['origin'][1], self.arm['origin'][1] - np.sin(self.state[0]) * self.arm['length'][0]]
-            line2_x = [line1_x[1], line1_x[1] - np.cos(self.state[1] + self.state[0]) * self.arm['length'][1]]
-            line2_y = [line1_y[1], line1_y[1] - np.sin(self.state[1] + self.state[0]) * self.arm['length'][1]]
+            line1_x = [self.arm['origin'][0], self.arm['origin'][0] - np.cos(x1[i]) * self.arm['length'][0]]
+            line1_y = [self.arm['origin'][1], self.arm['origin'][1] - np.sin(x1[i]) * self.arm['length'][0]]
+            line2_x = [line1_x[1], line1_x[1] - np.cos(x1[i] + x2[i]) * self.arm['length'][1]]
+            line2_y = [line1_y[1], line1_y[1] - np.sin(x1[i] + x2[i]) * self.arm['length'][1]]
 
             link_1.set_data(line1_x, line1_y)
             link_2.set_data(line2_x, line2_y)
@@ -136,8 +140,8 @@ class FingerContact:
             anchor_arm.set_data([self.arm['origin'][0], self.arm['origin'][0]],
                                 [self.arm['origin'][1], self.arm['origin'][1]])
 
-            anchor_circle.set_data([self.free_circle['center'][0], self.free_circle['center'][0] + np.cos(self.state[2])*self.free_circle['radius']],
-                                   [self.free_circle['center'][1], self.free_circle['center'][1] + np.sin(self.state[2])*self.free_circle['radius']])
+            anchor_circle.set_data([self.free_circle['center'][0], self.free_circle['center'][0] + np.cos(x3[i])*self.free_circle['radius']],
+                                   [self.free_circle['center'][1], self.free_circle['center'][1] + np.sin(x3[i])*self.free_circle['radius']])
 
             finger_tip.set_data([line2_x[1], line2_x[1]],
                                 [line2_y[1], line2_y[1]])
@@ -147,11 +151,11 @@ class FingerContact:
             # print('yes')
             return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
 
-        self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, 10),
+        self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, len(t)),
                                            interval=25)  # np.arrange for running in loop so that (i) in animate does not cross the len of x
 
         # ani.save('test.mp4')
         plt.show()
 
 
-# model = FingerContact()
+model = FingerContact()
