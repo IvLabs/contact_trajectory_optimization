@@ -17,15 +17,15 @@ class FingerContact:
         self.dof = 2
         self.dims = 2
 
-        self.arm = {'mass': np.array([3, 0.3, 0.3]).reshape((3, 1)), # also mass of circle
-                    'length': np.array([1.3, 1.3]).reshape((2, 1)),
+        self.arm = {'mass': np.array([1, 1, 0.3]).reshape((3, 1)), # also mass of circle
+                    'length': np.array([0.5, 0.5]).reshape((2, 1)),
                     'origin': np.zeros((2, 1))}
 
-        self.free_circle = {'center': np.array([0., -2.]).reshape((2, 1)),  # com of ellipse
-                            'radius': np.array([0.5]).reshape((1, 1))}  # minor and major axis length of ellipse
+        self.free_circle = {'center': np.array([0.1, -0.95]).reshape((2, 1)),  # com of ellipse
+                            'radius': np.array([0.3]).reshape((1, 1))}  # minor and major axis length of ellipse
 
         self.gravity = -9.81
-        self.mu = 1.
+        self.mu = 0.4
         self.dt = 0.1
 
         self.state = np.array([(180/np.pi)*45, -(180/np.pi)*3, 0]).reshape((3, 1))
@@ -105,6 +105,8 @@ class FingerContact:
         theta_contact = ca.atan2(x[0, 1] - self.free_circle['center'][0], x[1, 1] - self.free_circle['center'][1])
         p_contact = ca.SX.zeros(2, 1)
         p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
+        p_contact -= self.free_circle['center']
+        # phi = x[:, 1] - p_contact
         phi = x[:, 1] - p_contact
 
         # rotate lambda force represented in contact frame to world frame
@@ -118,23 +120,24 @@ class FingerContact:
         # For tangential vel @ contact
         normal_vec_contact = Rot_contact.T @ ca.SX.ones(2, 1)
         tangent_vec_contact = ca.DM([[0, -1], [1, 0]]) @ normal_vec_contact
+        psi = tangent_vec_contact * q[2] * self.free_circle['radius']
 
-        ee_vel_b = J_ee_b @ dq[0:2]
-        Rot_q1q2 = ca.SX.zeros(2, 2)
-        Rot_q1q2[0, 0], Rot_q1q2[0, 1] = ca.cos(q[0] + q[1]), -ca.sin(q[0] + q[1])
-        Rot_q1q2[1, 0], Rot_q1q2[1, 1] = ca.sin(q[0] + q[1]),  ca.cos(q[0] + q[1])
-        ee_vel_s = Rot_q1q2 @ ee_vel_b[0:2]
+        # ee_vel_b = J_ee_b @ dq[0:2]
+        # Rot_q1q2 = ca.SX.zeros(2, 2)
+        # Rot_q1q2[0, 0], Rot_q1q2[0, 1] = ca.cos(q[0] + q[1]), -ca.sin(q[0] + q[1])
+        # Rot_q1q2[1, 0], Rot_q1q2[1, 1] = ca.sin(q[0] + q[1]),  ca.cos(q[0] + q[1])
+        # ee_vel_s = Rot_q1q2 @ ee_vel_b[0:2]
 
-        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_ee, J_ee_b, J_ee_s, lam_c, lam_w],
-                        ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'lam_c', 'lam_w'])
+        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_ee, J_ee_b, J_ee_s, lam_c, lam_w, psi],
+                        ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'lam_c', 'lam_w', 'psi'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                     ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
     def visualize(self, x1, x2, x3, t):
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, aspect='equal')
-        self.ax.set_xlim([-4, 4])
-        self.ax.set_ylim([-4, 4])
+        self.ax.set_xlim([-2, 2])
+        self.ax.set_ylim([-2, 2])
         self.ax.grid()
 
         time_template = 'time = %.1fs'
@@ -160,10 +163,10 @@ class FingerContact:
             return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
 
         def animate(i):
-            line1_x = [self.arm['origin'][0], self.arm['origin'][0] - np.cos(x1[i]) * self.arm['length'][0]]
-            line1_y = [self.arm['origin'][1], self.arm['origin'][1] - np.sin(x1[i]) * self.arm['length'][0]]
-            line2_x = [line1_x[1], line1_x[1] - np.cos(x1[i] + x2[i]) * self.arm['length'][1]]
-            line2_y = [line1_y[1], line1_y[1] - np.sin(x1[i] + x2[i]) * self.arm['length'][1]]
+            line1_x = [self.arm['origin'][0], self.arm['origin'][0] + np.sin(x1[i]) * self.arm['length'][0]]
+            line1_y = [self.arm['origin'][1], self.arm['origin'][1] - np.cos(x1[i]) * self.arm['length'][0]]
+            line2_x = [line1_x[1], line1_x[1] + np.sin(x1[i] + x2[i]) * self.arm['length'][1]]
+            line2_y = [line1_y[1], line1_y[1] - np.cos(x1[i] + x2[i]) * self.arm['length'][1]]
 
             link_1.set_data(line1_x, line1_y)
             link_2.set_data(line2_x, line2_y)
