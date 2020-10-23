@@ -17,7 +17,7 @@ class FingerContact:
         self.dof = 2
         self.dims = 2
 
-        self.arm = {'mass': np.array([3, 0.3, 0.3]).reshape((3, 1)),
+        self.arm = {'mass': np.array([3, 0.3, 0.3]).reshape((3, 1)), # also mass of circle
                     'length': np.array([1.3, 1.3]).reshape((2, 1)),
                     'origin': np.zeros((2, 1))}
 
@@ -37,24 +37,43 @@ class FingerContact:
         q = ca.SX.sym('q', self.n_joints, 1)
         dq = ca.SX.sym('dq', self.n_joints, 1)
         ddq = ca.SX.sym('ddq', self.n_joints, 1)
-        lam = ca.SX.sym('lambda', 2, self.n_contact)
+        lam = ca.SX.sym('lambda', 3, self.n_contact)
 
-        x = ca.SX.zeros(2, 3)
-        x[0, 0], x[1, 0] = self.arm['origin'][0] - self.arm['length'][0] * ca.cos(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.sin(q[0])
-        x[0, 1], x[1, 1] = x[0, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1]), x[1, 0] - self.arm['length'][1] * ca.sin(q[0] + q[1])
+        "End Effector pos"
+        x = ca.SX.zeros(2, self.n_joints)
+        x[0, 0], x[1, 0] = self.arm['origin'][0] + self.arm['length'][0] * ca.sin(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.cos(q[0])
+        x[0, 1], x[1, 1] = x[0, 0] + self.arm['length'][1] * ca.sin(q[0] + q[1]), x[1, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1])
         x[0, 2], x[1, 2] = self.free_circle['center'][0], self.free_circle['center'][1]
 
+        a = ca.SX.zeros(1, self.n_joints)
         temp = ca.DM.ones(ca.Sparsity.diag(3)); temp[1, 0] = 1
-        a = ca.reshape(temp @ q, 1, 3)
+        a[0, :] = temp @ q
+
+        J_ee = ca.jacobian(x[:, 1], q)
+
+        J_ee_b = ca.SX.ones(3, 2)
+        J_ee_b[0, 0] = self.arm['length'][1] + self.arm['length'][0]*ca.cos(q[1])
+        J_ee_b[0, 1] = self.arm['length'][1]
+        J_ee_b[1, 0] = - self.arm['length'][1]*ca.sin(q[1])
+        J_ee_b[1, 1] = 0
+
+        J_ee_s = ca.SX.ones(3, 2)
+        J_ee_s[0, 0] = 0
+        J_ee_s[0, 1] = self.arm['length'][1]*ca.cos(q[0])
+        J_ee_s[1, 0] = 0
+        J_ee_s[1, 1] = - self.arm['length'][1]*ca.sin(q[1])
 
         dx = ca.jtimes(x, q, dq)
         da = ca.jtimes(a, q, dq)
 
-        # For inertia matrix
+        "For inertia matrix"
         H = ca.SX.zeros(self.n_joints, self.n_joints)
         for i in range(self.n_joints):
-            J_l = ca.jacobian((x[:, i]), q)
+            J_l = ca.jacobian(x[:, i], q)
             J_a = ca.jacobian(a[:, i], q).T
+            # print(J_l.shape)
+            # print('------------')
+
             I = ca.SX.zeros(3, 3)
 
             if i < self.n_joints - 1:
@@ -64,7 +83,7 @@ class FingerContact:
 
             H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
 
-        # For coriolis + centrifugal matrix
+        "For coriolis + centrifugal matrix"
         C = ca.SX.zeros(self.n_joints, self.n_joints)
         for i in range(self.n_joints):
             for j in range(self.n_joints):
@@ -74,30 +93,42 @@ class FingerContact:
                     sum_ += c_ijk @ dq[j] @ dq[k]
                 C[i, j] = sum_
 
-        # For G matrix
-        V = self.arm['mass'] * self.gravity * ca.reshape(x[1, :], 3, 1)
-        G = ca.diag(ca.jacobian(V, q))
+        "For G matrix"
+        V = self.gravity * ca.sum2(self.arm['mass'].T * x[1, :])
+        G = ca.jacobian(V, q).T
 
         # For B matrix
-        B = ca.SX.zeros(self.n_joints, self.dof)
+        B = ca.DM.zeros(self.n_joints, self.dof)
         B[0, 0], B[1, 1] = 1, 1
 
-        # For external force
-        theta = ca.atan2(x[0, 1], x[1, 1])
-        p = ca.SX.zeros(2, 1)
-        p[0, 0], p[1, 0] = self.free_circle['radius']*ca.cos(theta), self.free_circle['radius']*ca.sin(theta)
-        # A = (((x[0, 1] - self.free_ellipse['center'][0])*ca.cos(q[2]) +
-        #       (x[1, 1] - self.free_ellipse['center'][1])*ca.sin(q[2])) / self.free_ellipse['axis'][0]) ** 2
-        # B = (((x[0, 1] - self.free_ellipse['center'][0])*ca.sin(q[2]) -
-        #       (x[1, 1] - self.free_ellipse['center'][1])*ca.cos(q[2])) / self.free_ellipse['axis'][1]) ** 2
-        phi = x[:, 1] - p
-        # print(phi.shape)
-        J_phi = ca.jacobian(phi, q)
-        # print(J_phi.shape)
-        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_phi],
-                                            ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_phi'])
+        "For external force"
+        theta_contact = ca.atan2(x[0, 1] - self.free_circle['center'][0], x[1, 1] - self.free_circle['center'][1])
+        p_contact = ca.SX.zeros(2, 1)
+        p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
+        phi = x[:, 1] - p_contact
+
+        # rotate lambda force represented in contact frame to world frame
+        Rot_contact = ca.SX.zeros(2, 2)
+        Rot_contact[0, 0], Rot_contact[0, 1] = ca.cos(theta_contact), ca.sin(theta_contact)
+        Rot_contact[1, 0], Rot_contact[1, 1] = - ca.sin(theta_contact), ca.cos(theta_contact)
+        lam_c = ca.SX.zeros(2, 1)
+        lam_c[0, 0], lam_c[1, 0] = lam[0, 0] - lam[1, 0], lam[2, 0]
+        lam_w = Rot_contact @ lam_c
+
+        # For tangential vel @ contact
+        normal_vec_contact = Rot_contact.T @ ca.SX.ones(2, 1)
+        tangent_vec_contact = ca.DM([[0, -1], [1, 0]]) @ normal_vec_contact
+
+        ee_vel_b = J_ee_b @ dq[0:2]
+        Rot_q1q2 = ca.SX.zeros(2, 2)
+        Rot_q1q2[0, 0], Rot_q1q2[0, 1] = ca.cos(q[0] + q[1]), -ca.sin(q[0] + q[1])
+        Rot_q1q2[1, 0], Rot_q1q2[1, 1] = ca.sin(q[0] + q[1]),  ca.cos(q[0] + q[1])
+        ee_vel_s = Rot_q1q2 @ ee_vel_b[0:2]
+
+        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_ee, J_ee_b, J_ee_s, lam_c, lam_w],
+                        ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'lam_c', 'lam_w'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
-                                            ['q', 'dq'], ['x', 'dx', 'a', 'da'])
+                                    ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
     def visualize(self, x1, x2, x3, t):
         self.fig = plt.figure()
