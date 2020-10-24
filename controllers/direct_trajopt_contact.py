@@ -50,10 +50,11 @@ class NLP:
             self.gammas.append(self.opti.variable(1))
 
     def __setConstraints__(self):
-        self.opti.subject_to(self.states[0] == [-np.pi/2, 0, 0])
-        self.opti.subject_to(self.states[-1] == [-np.pi/2, 0, np.pi/2])
-        # self.opti.subject_to(self.dstates[0] == [0]*3)
-        # self.opti.subject_to(self.dstates[-1] == [0]*3)
+        self.opti.subject_to(self.states[0] == [np.pi/2, -np.pi/2, 0])
+        self.opti.subject_to(self.states[-1] == [np.pi/2, -np.pi/2, np.pi/2])
+        self.opti.subject_to(self.dstates[0] == [0]*3)
+        self.opti.subject_to(self.dstates[-1] == [0]*3)
+
         # self.phis = ca.MX.zeros(2, self.N)
         for k in range(self.N - 1):
             q_1, dq_1 = self.states[k], self.dstates[k]
@@ -74,15 +75,15 @@ class NLP:
             f_2 = self.model.dynamics(q=q_2, dq=dq_2, lam=lam_2)
 
             self.opti.subject_to(q_1 - q_2 + self.h * dq_2 == 0)
-            self.opti.subject_to(f_2['H'] @ (dq_2 - dq_1) +
+            self.opti.subject_to(f_2['H'] @ (dq_2 - dq_1) -
                                  self.h * (f_2['C'] @ dq_2 + f_2['G'] - f_2['B'] @ u_2 - f_2['J_ee'].T @ f_2['lam_w']) == 0)
             # self.phis[:, k] = kine_1['x'][:, 1] - kine_1['x'][:, 2]
 
             # friction constraints
 
-            self.opti.subject_to( (kine_1['x'][0] - self.model.free_circle['center'][0])**2
-                                  + (kine_1['x'][1] - self.model.free_circle['center'][1])**2
-                                  >= self.model.free_circle['radius'])
+            self.opti.subject_to( (kine_1['x'][0, 1] - self.model.free_circle['center'][0])**2
+                                  + (kine_1['x'][1, 1] - self.model.free_circle['center'][1])**2
+                                  >= self.model.free_circle['radius']**2)
 
             # self.opti.subject_to(lam_1 >= 0)
             # self.opti.subject_to(f_1['phi'] >= 0)
@@ -119,8 +120,8 @@ class NLP:
             # self.opti.subject_to(ca.fabs(q_1[0] + q_1[1]) > 0)
 
     def __setCosts__(self):
-        Q = ca.diag(ca.MX([1, 1, 1]))
-        R = ca.diag(ca.MX([1, 1]))
+        Q = ca.diag(ca.MX([1, 1, 100]))
+        R = ca.diag(ca.MX([0.1, 0.1]))
         cost = 0
         for k in range(self.N):
             q, dq = self.states[k], self.dstates[k]

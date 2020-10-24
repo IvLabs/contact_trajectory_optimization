@@ -107,7 +107,7 @@ class FingerContact:
         p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
         p_contact -= self.free_circle['center']
         # phi = x[:, 1] - p_contact
-        phi = x[:, 1] - p_contact
+        phi = x[:, 1] - self.free_circle['center']
 
         # rotate lambda force represented in contact frame to world frame
         Rot_contact = ca.SX.zeros(2, 2)
@@ -131,7 +131,7 @@ class FingerContact:
         ee_vel_orth_w = ee_vel_w - ee_vel_proj
         ee_vel_orth_ref = Rot_contact.T *ee_vel_orth_w
 
-        psi = ee_vel_orth_w[0] - q[2] * self.free_circle['radius']
+        psi = ee_vel_orth_w[0] + q[2] * self.free_circle['radius']
 
         self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_ee, J_ee_b, J_ee_s, lam_c, lam_w, psi],
                         ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'lam_c', 'lam_w', 'psi'])
