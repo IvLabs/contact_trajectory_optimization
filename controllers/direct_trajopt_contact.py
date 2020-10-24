@@ -50,10 +50,10 @@ class NLP:
             self.gammas.append(self.opti.variable(1))
 
     def __setConstraints__(self):
-        self.opti.subject_to(self.states[0] == [np.pi/4, -np.pi, 0])
-        self.opti.subject_to(self.states[-1] == [np.pi/4, -np.pi, np.pi/2])
-        self.opti.subject_to(self.dstates[0] == [0]*3)
-        self.opti.subject_to(self.dstates[-1] == [0]*3)
+        self.opti.subject_to(self.states[0] == [-np.pi/2, 0, 0])
+        self.opti.subject_to(self.states[-1] == [-np.pi/2, 0, np.pi/2])
+        # self.opti.subject_to(self.dstates[0] == [0]*3)
+        # self.opti.subject_to(self.dstates[-1] == [0]*3)
         # self.phis = ca.MX.zeros(2, self.N)
         for k in range(self.N - 1):
             q_1, dq_1 = self.states[k], self.dstates[k]
@@ -79,6 +79,11 @@ class NLP:
             # self.phis[:, k] = kine_1['x'][:, 1] - kine_1['x'][:, 2]
 
             # friction constraints
+
+            self.opti.subject_to( (kine_1['x'][0] - self.model.free_circle['center'][0])**2
+                                  + (kine_1['x'][1] - self.model.free_circle['center'][1])**2
+                                  >= self.model.free_circle['radius'])
+
             # self.opti.subject_to(lam_1 >= 0)
             # self.opti.subject_to(f_1['phi'] >= 0)
             # self.opti.subject_to(f_1['phi'].T @ lam_1 == 0)
@@ -125,6 +130,7 @@ class NLP:
         self.opti.minimize(cost)
 
     def __solve__(self):
+
         p_opts = {"expand": True}
         s_opts = {"max_iter": 3000}
         self.opti.solver("ipopt", p_opts, s_opts)

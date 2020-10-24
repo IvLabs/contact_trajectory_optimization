@@ -120,13 +120,18 @@ class FingerContact:
         # For tangential vel @ contact
         normal_vec_contact = Rot_contact.T @ ca.SX.ones(2, 1)
         tangent_vec_contact = ca.DM([[0, -1], [1, 0]]) @ normal_vec_contact
-        psi = tangent_vec_contact * q[2] * self.free_circle['radius']
 
-        # ee_vel_b = J_ee_b @ dq[0:2]
-        # Rot_q1q2 = ca.SX.zeros(2, 2)
-        # Rot_q1q2[0, 0], Rot_q1q2[0, 1] = ca.cos(q[0] + q[1]), -ca.sin(q[0] + q[1])
-        # Rot_q1q2[1, 0], Rot_q1q2[1, 1] = ca.sin(q[0] + q[1]),  ca.cos(q[0] + q[1])
-        # ee_vel_s = Rot_q1q2 @ ee_vel_b[0:2]
+        ee_vel_b = J_ee_b @ dq[0:2]
+        Rot_q1q2 = ca.SX.zeros(2, 2)
+        Rot_q1q2[0, 0], Rot_q1q2[0, 1] = ca.cos(q[0] + q[1]), -ca.sin(q[0] + q[1])
+        Rot_q1q2[1, 0], Rot_q1q2[1, 1] = ca.sin(q[0] + q[1]),  ca.cos(q[0] + q[1])
+        ee_vel_w = Rot_q1q2 @ ee_vel_b[0:2]
+
+        ee_vel_proj = ca.dot(ee_vel_w, normal_vec_contact) * normal_vec_contact
+        ee_vel_orth_w = ee_vel_w - ee_vel_proj
+        ee_vel_orth_ref = Rot_contact.T *ee_vel_orth_w
+
+        psi = ee_vel_orth_w[0] - q[2] * self.free_circle['radius']
 
         self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_ee, J_ee_b, J_ee_s, lam_c, lam_w, psi],
                         ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'lam_c', 'lam_w', 'psi'])
