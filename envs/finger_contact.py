@@ -114,7 +114,7 @@ class FingerContact:
         """Free circle"""
         p_contact = ca.SX.zeros(2, 1)
         p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
-        # p_contact -= self.free_circle['center']
+        # p_contact -= self.free_ellipse['center']
         # phi = x[:, 1] - p_contact
         phi = (x[0, 1] - self.free_circle['center'][0]) ** 2 + (x[1, 1] - self.free_circle['center'][1]) ** 2  - self.free_circle['radius'] ** 2
 

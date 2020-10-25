@@ -87,9 +87,9 @@ class NLP:
 
             # friction constraints
 
-            # self.opti.subject_to( (kine_1['x'][0, 1] - self.model.free_circle['center'][0])**2
-            #                       + (kine_1['x'][1, 1] - self.model.free_circle['center'][1])**2
-            #                       >= self.model.free_circle['radius']**2)
+            # self.opti.subject_to( (kine_1['x'][0, 1] - self.model.free_ellipse['center'][0])**2
+            #                       + (kine_1['x'][1, 1] - self.model.free_ellipse['center'][1])**2
+            #                       >= self.model.free_ellipse['radius']**2)
 
             # self.opti.subject_to(lam_1 >= 0)
             # self.opti.subject_to(f_1['phi'] >= 0)
