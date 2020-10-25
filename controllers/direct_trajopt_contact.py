@@ -74,17 +74,21 @@ class NLP:
             f_1 = self.model.dynamics(q=q_1, dq=dq_1, lam=lam_1)
             f_2 = self.model.dynamics(q=q_2, dq=dq_2, lam=lam_2)
 
+            ## finger
             self.opti.subject_to(q_1[0:2] - q_2[0:2] + self.h * dq_2[0:2] == 0)
             self.opti.subject_to(f_2['H'] @ (dq_2[0:2] - dq_1[0:2]) -
                                  self.h * (f_2['C'] @ dq_2[0:2] + f_2['G'] - f_2['B'] @ u_2 - f_2['J_ee'].T @ f_2['lam_w']) == 0)
+            ## free circle
             self.opti.subject_to(q_1[-1] - q_2[-1] + self.h * dq_2[-1] == 0)
+            self.opti.subject_to(dq_1[-1] - dq_2[-1] + self.h * f_2['ddq_circle'] == 0)
+
             # self.phis[:, k] = kine_1['x'][:, 1] - kine_1['x'][:, 2]
 
             # friction constraints
 
-            self.opti.subject_to( (kine_1['x'][0, 1] - self.model.free_circle['center'][0])**2
-                                  + (kine_1['x'][1, 1] - self.model.free_circle['center'][1])**2
-                                  >= self.model.free_circle['radius']**2)
+            # self.opti.subject_to( (kine_1['x'][0, 1] - self.model.free_circle['center'][0])**2
+            #                       + (kine_1['x'][1, 1] - self.model.free_circle['center'][1])**2
+            #                       >= self.model.free_circle['radius']**2)
 
             # self.opti.subject_to(lam_1 >= 0)
             # self.opti.subject_to(f_1['phi'] >= 0)
@@ -121,7 +125,7 @@ class NLP:
             # self.opti.subject_to(ca.fabs(q_1[0] + q_1[1]) > 0)
 
     def __setCosts__(self):
-        Q = ca.diag(ca.MX([1, 1, 100]))
+        Q = ca.diag(ca.MX([1, 1, 1]))
         R = ca.diag(ca.MX([0.1, 0.1]))
         cost = 0
         for k in range(self.N):

@@ -114,9 +114,9 @@ class FingerContact:
         """Free circle"""
         p_contact = ca.SX.zeros(2, 1)
         p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
-        p_contact -= self.free_circle['center']
+        # p_contact -= self.free_circle['center']
         # phi = x[:, 1] - p_contact
-        phi = x[:, 1] - self.free_circle['center']
+        phi = (x[0, 1] - self.free_circle['center'][0]) ** 2 + (x[1, 1] - self.free_circle['center'][1]) ** 2  - self.free_circle['radius'] ** 2
 
         # For tangential vel @ contact
         normal_vec_contact = Rot_contact.T @ ca.SX.ones(2, 1)
@@ -132,7 +132,8 @@ class FingerContact:
         ee_vel_orth_w = ee_vel_w - ee_vel_proj
         ee_vel_orth_ref = Rot_contact.T *ee_vel_orth_w
 
-        psi = ee_vel_orth_w[0] + q[2] * self.free_circle['radius']
+        psi = ee_vel_orth_ref[0] + q[2] * self.free_circle['radius']
+
         ddq_circle = (lam[1] - lam[0])/((1/2) * self.arm['mass'][-1] * self.free_circle['radius']**2)
 
         self.dynamics = ca.Function('Dynamics', [q, dq, u, lam],
