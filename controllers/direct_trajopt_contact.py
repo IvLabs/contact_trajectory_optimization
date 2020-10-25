@@ -74,9 +74,10 @@ class NLP:
             f_1 = self.model.dynamics(q=q_1, dq=dq_1, lam=lam_1)
             f_2 = self.model.dynamics(q=q_2, dq=dq_2, lam=lam_2)
 
-            self.opti.subject_to(q_1 - q_2 + self.h * dq_2 == 0)
-            self.opti.subject_to(f_2['H'] @ (dq_2 - dq_1) -
-                                 self.h * (f_2['C'] @ dq_2 + f_2['G'] - f_2['B'] @ u_2 - f_2['J_ee'].T @ f_2['lam_w']) == 0)
+            self.opti.subject_to(q_1[0:2] - q_2[0:2] + self.h * dq_2[0:2] == 0)
+            self.opti.subject_to(f_2['H'] @ (dq_2[0:2] - dq_1[0:2]) -
+                                 self.h * (f_2['C'] @ dq_2[0:2] + f_2['G'] - f_2['B'] @ u_2 - f_2['J_ee'].T @ f_2['lam_w']) == 0)
+            self.opti.subject_to(q_1[-1] - q_2[-1] + self.h * dq_2[-1] == 0)
             # self.phis[:, k] = kine_1['x'][:, 1] - kine_1['x'][:, 2]
 
             # friction constraints

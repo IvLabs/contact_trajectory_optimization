@@ -37,78 +37,72 @@ class FingerContact:
         q = ca.SX.sym('q', self.n_joints, 1)
         dq = ca.SX.sym('dq', self.n_joints, 1)
         ddq = ca.SX.sym('ddq', self.n_joints, 1)
+        u = ca.SX.sym('u', self.dof, 1)
         lam = ca.SX.sym('lambda', 3, self.n_contact)
 
+        """Finger Dynamics"""
+        q_finger = q[0:2]
+        dq_finger = dq[0:2]
+
         "End Effector pos"
-        x = ca.SX.zeros(2, self.n_joints)
-        x[0, 0], x[1, 0] = self.arm['origin'][0] + self.arm['length'][0] * ca.sin(q[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.cos(q[0])
-        x[0, 1], x[1, 1] = x[0, 0] + self.arm['length'][1] * ca.sin(q[0] + q[1]), x[1, 0] - self.arm['length'][1] * ca.cos(q[0] + q[1])
-        x[0, 2], x[1, 2] = self.free_circle['center'][0], self.free_circle['center'][1]
+        x = ca.SX.zeros(2, self.dof)
+        x[0, 0], x[1, 0] = self.arm['origin'][0] + self.arm['length'][0] * ca.sin(q_finger[0]), self.arm['origin'][1] - self.arm['length'][0] * ca.cos(q_finger[0])
+        x[0, 1], x[1, 1] = x[0, 0] + self.arm['length'][1] * ca.sin(q_finger[0] + q_finger[1]), x[1, 0] - self.arm['length'][1] * ca.cos(q_finger[0] + q_finger[1])
 
-        a = ca.SX.zeros(1, self.n_joints)
-        temp = ca.DM.ones(ca.Sparsity.diag(3)); temp[1, 0] = 1
-        a[0, :] = temp @ q
+        a = ca.SX.zeros(3, self.dof)
+        temp = ca.DM.ones(ca.Sparsity.diag(2)); temp[1, 0] = 1
+        a[2, :] = temp @ q_finger
 
-        J_ee = ca.jacobian(x[:, 1], q)
+        J_ee = ca.jacobian(x[:, 1], q_finger)
 
         J_ee_b = ca.SX.ones(3, 2)
-        J_ee_b[0, 0] = self.arm['length'][1] + self.arm['length'][0]*ca.cos(q[1])
+        J_ee_b[0, 0] = self.arm['length'][1] + self.arm['length'][0]*ca.cos(q_finger[1])
         J_ee_b[0, 1] = self.arm['length'][1]
-        J_ee_b[1, 0] = - self.arm['length'][1]*ca.sin(q[1])
+        J_ee_b[1, 0] = - self.arm['length'][1]*ca.sin(q_finger[1])
         J_ee_b[1, 1] = 0
 
         J_ee_s = ca.SX.ones(3, 2)
         J_ee_s[0, 0] = 0
-        J_ee_s[0, 1] = self.arm['length'][1]*ca.cos(q[0])
+        J_ee_s[0, 1] = self.arm['length'][1]*ca.cos(q_finger[0])
         J_ee_s[1, 0] = 0
-        J_ee_s[1, 1] = - self.arm['length'][1]*ca.sin(q[1])
+        J_ee_s[1, 1] = - self.arm['length'][1]*ca.sin(q_finger[1])
 
-        dx = ca.jtimes(x, q, dq)
-        da = ca.jtimes(a, q, dq)
+        dx = ca.jtimes(x, q_finger, dq_finger)
+        da = ca.jtimes(a, q_finger, dq_finger)
 
         "For inertia matrix"
-        H = ca.SX.zeros(self.n_joints, self.n_joints)
-        for i in range(self.n_joints):
-            J_l = ca.jacobian(x[:, i], q)
-            J_a = ca.jacobian(a[:, i], q).T
+        H = ca.SX.zeros(self.dof, self.dof)
+        for i in range(self.dof):
+            J_l = ca.jacobian(x[:, i], q_finger)
+            J_a = ca.jacobian(a[:, i], q_finger)
             # print(J_l.shape)
             # print('------------')
+            # print(J_a.shape)
 
             I = ca.SX.zeros(3, 3)
-
-            if i < self.n_joints - 1:
-                I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2  # Rod
-            else:
-                I[2, 2] = (1 / 2) * self.arm['mass'][i] * np.sum(self.free_circle['radius'] ** 2)  # Ellipse
+            I[2, 2] = (1 / 12) * self.arm['mass'][i] * self.arm['length'][i] ** 2  # Rod
 
             H += self.arm['mass'][i] * J_l.T @ J_l + J_a.T @ I @ J_a
 
         "For coriolis + centrifugal matrix"
-        C = ca.SX.zeros(self.n_joints, self.n_joints)
-        for i in range(self.n_joints):
-            for j in range(self.n_joints):
+        C = ca.SX.zeros(self.dof, self.dof)
+        for i in range(self.dof):
+            for j in range(self.dof):
                 sum_ = 0
-                for k in range(self.n_joints):
-                    c_ijk = ca.jacobian(H[i, j], q[k]) - (1/2)*ca.jacobian(H[j, k], q[i])
-                    sum_ += c_ijk @ dq[j] @ dq[k]
+                for k in range(self.dof):
+                    c_ijk = ca.jacobian(H[i, j], q_finger[k]) - (1/2)*ca.jacobian(H[j, k], q_finger[i])
+                    sum_ += c_ijk @ dq_finger[j] @ dq_finger[k]
                 C[i, j] = sum_
 
         "For G matrix"
-        V = self.gravity * ca.sum2(self.arm['mass'].T * x[1, :])
-        G = ca.jacobian(V, q).T
+        V = self.gravity * ca.sum2(self.arm['mass'][0:2].T * x[1, :])
+        G = ca.jacobian(V, q_finger).T
 
-        # For B matrix
-        B = ca.DM.zeros(self.n_joints, self.dof)
-        B[0, 0], B[1, 1] = 1, 1
+        "For B matrix"
+        B = ca.DM.ones(ca.Sparsity.diag(self.dof))
 
         "For external force"
         theta_contact = ca.atan2(x[0, 1] - self.free_circle['center'][0], x[1, 1] - self.free_circle['center'][1])
-        p_contact = ca.SX.zeros(2, 1)
-        p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
-        p_contact -= self.free_circle['center']
-        # phi = x[:, 1] - p_contact
-        phi = x[:, 1] - self.free_circle['center']
-
         # rotate lambda force represented in contact frame to world frame
         Rot_contact = ca.SX.zeros(2, 2)
         Rot_contact[0, 0], Rot_contact[0, 1] = ca.cos(theta_contact), ca.sin(theta_contact)
@@ -116,6 +110,13 @@ class FingerContact:
         lam_c = ca.SX.zeros(2, 1)
         lam_c[0, 0], lam_c[1, 0] = lam[0, 0] - lam[1, 0], lam[2, 0]
         lam_w = Rot_contact @ lam_c
+
+        """Free circle"""
+        p_contact = ca.SX.zeros(2, 1)
+        p_contact[0, 0], p_contact[1, 0] = self.free_circle['radius']*ca.cos(theta_contact), self.free_circle['radius']*ca.sin(theta_contact)
+        p_contact -= self.free_circle['center']
+        # phi = x[:, 1] - p_contact
+        phi = x[:, 1] - self.free_circle['center']
 
         # For tangential vel @ contact
         normal_vec_contact = Rot_contact.T @ ca.SX.ones(2, 1)
@@ -132,9 +133,12 @@ class FingerContact:
         ee_vel_orth_ref = Rot_contact.T *ee_vel_orth_w
 
         psi = ee_vel_orth_w[0] + q[2] * self.free_circle['radius']
+        ddq_circle = (lam[1] - lam[0])/((1/2) * self.arm['mass'][-1] * self.free_circle['radius']**2)
 
-        self.dynamics = ca.Function('Dynamics', [q, dq, lam], [H, C, G, B, phi, J_ee, J_ee_b, J_ee_s, lam_c, lam_w, psi],
-                        ['q', 'dq', 'lam'], ['H', 'C', 'G', 'B', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'lam_c', 'lam_w', 'psi'])
+        self.dynamics = ca.Function('Dynamics', [q, dq, u, lam],
+                                    [H, C, B, G, phi, J_ee, J_ee_b, J_ee_s, ddq_circle, lam_c, lam_w, psi],
+                                    ['q', 'dq', 'u', 'lam'],
+                                    ['H', 'C', 'B', 'G', 'phi', 'J_ee', 'J_ee_b', 'J_ee_s', 'ddq_circle', 'lam_c', 'lam_w', 'psi'])
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                     ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
