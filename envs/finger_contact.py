@@ -143,7 +143,7 @@ class FingerContact:
         self.kinematics = ca.Function('Kinematics', [q, dq], [x, dx, a, da],
                                     ['q', 'dq'], ['x', 'dx', 'a', 'da'])
 
-    def visualize(self, x1, x2, x3, t):
+    def visualize(self, x1, x2, x3, t, dt):
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, aspect='equal')
         self.ax.set_xlim([-2, 2])
@@ -190,7 +190,7 @@ class FingerContact:
             finger_tip.set_data([line2_x[1], line2_x[1]],
                                 [line2_y[1], line2_y[1]])
 
-            time_text.set_text(time_template % (i * 0.05))
+            time_text.set_text(time_template % (i * dt))
             self.ax.add_artist(circle)
             # print('yes')
             return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
@@ -198,7 +198,7 @@ class FingerContact:
         self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, len(t)),
                                            interval=25)  # np.arrange for running in loop so that (i) in animate does not cross the len of x
 
-        # ani.save('test.mp4')
+        # self.ani.save('finger_contact.mp4')
         plt.show()
 
 

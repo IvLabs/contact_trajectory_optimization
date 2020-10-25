@@ -11,10 +11,10 @@ class NLP:
     def __init__(self):
         super().__init__()
         self.model = FingerContact()
-        self.__setOptimizationParams__(total_duration=2, n_steps=40)
+        self.__setOptimizationParams__(total_duration=2, n_steps=20)
 
         self.opti = ca.Opti()
-        self.var_dt = False
+        self.var_dt = True
         self.__setVariables__()
         self.__setConstraints__()
         self.__setCosts__()
@@ -28,6 +28,7 @@ class NLP:
             self.h = self.opti.variable(1)
             self.opti.subject_to(self.h > 0)
             self.opti.subject_to(self.h <= self.model.dt)
+            self.opti.subject_to(self.h == self.T/self.N)
             self.opti.set_initial(self.h, 0.05)
         else:
             self.h = 0.05
@@ -50,8 +51,8 @@ class NLP:
             self.gammas.append(self.opti.variable(1))
 
     def __setConstraints__(self):
-        self.opti.subject_to(self.states[0] == [np.pi/2, -np.pi/2, 0])
-        self.opti.subject_to(self.states[-1] == [np.pi/2, -np.pi/2, np.pi/2])
+        self.opti.subject_to(self.states[0] == [np.pi/2, -np.pi/1.5, 0])
+        self.opti.subject_to(self.states[-1] == [np.pi/2, -np.pi/1.5, np.pi/2])
         self.opti.subject_to(self.dstates[0] == [0]*3)
         self.opti.subject_to(self.dstates[-1] == [0]*3)
 
@@ -148,12 +149,10 @@ class NLP:
             self.debug = True
 
     def __interpolate__(self):
-        k = 0.005
-        self.x1 = []
-        self.x2 = []
-        self.x3 = []
-        self.u1 = []
-        self.u2 = []
+        self.x1 = []; self.dx1 = []
+        self.x2 = []; self.dx2 = []
+        self.x3 = []; self.dx3 = []
+        self.u1 = []; self.u2 = []
 
         if self.debug:
             if self.var_dt:
@@ -161,10 +160,17 @@ class NLP:
             else:
                 self.dt = self.h
 
-            for i in range(self.N):
+            for i in range(len(self.t)):
                 self.x1.append(self.opti.debug.value(self.states[i][0]))
                 self.x2.append(self.opti.debug.value(self.states[i][1]))
                 self.x3.append(self.opti.debug.value(self.states[i][2]))
+
+                self.dx1.append(self.solution.value(self.dstates[i][0]))
+                self.dx2.append(self.solution.value(self.dstates[i][1]))
+                self.dx3.append(self.solution.value(self.dstates[i][2]))
+
+                self.u1.append(self.opti.debug.value(self.actions[i][0]))
+                self.u2.append(self.opti.debug.value(self.actions[i][1]))
         else:
             self.dt = self.solution.value(self.h)
             for i in range(self.N):
@@ -172,17 +178,76 @@ class NLP:
                 self.x2.append(self.solution.value(self.states[i][1]))
                 self.x3.append(self.solution.value(self.states[i][2]))
 
+                self.dx1.append(self.solution.value(self.dstates[i][0]))
+                self.dx2.append(self.solution.value(self.dstates[i][1]))
+                self.dx3.append(self.solution.value(self.dstates[i][2]))
+
+                self.u1.append(self.solution.value(self.actions[i][0]))
+                self.u2.append(self.solution.value(self.actions[i][1]))
+
+        self.k = self.dt/4
+        self.t = np.linspace(0, self.T, int(self.T / self.k))
+
+        self.t_points = np.linspace(0, self.N * self.dt, self.N)
+
+        x1_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.x1)
+        self.x1_spline = x1_spline_function(self.t)
+
+        x2_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.x2)
+        self.x2_spline = x2_spline_function(self.t)
+
+        x3_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.x3)
+        self.x3_spline = x3_spline_function(self.t)
+
+        dx1_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.dx1)
+        self.dx1_spline = dx1_spline_function(self.t)
+
+        dx2_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.dx2)
+        self.dx2_spline = dx2_spline_function(self.t)
+
+        dx3_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.dx3)
+        self.dx3_spline = dx3_spline_function(self.t)
+
         self.__plot__()
 
     def __plot__(self):
-        t = np.linspace(0, self.N * self.dt, self.N)
-        plt.plot(t, self.x1, 'o')
-        plt.plot(t, self.x2, 'o')
-        plt.plot(t, self.x3, 'o')
+        fig = plt.figure()
+        fig.tight_layout()
+
+        ax1 = fig.add_subplot(311)
+        ax1.grid()
+
+        ax1.plot(self.t_points, self.x1, 'o', label='q1')
+        ax1.plot(self.t_points, self.x2, 'o', label='q2')
+        ax1.plot(self.t_points, self.x3, 'o', label='q3')
+
+        ax1.plot(self.t, self.x1_spline, '-', color='black')
+        ax1.plot(self.t, self.x2_spline, '-', color='black')
+        ax1.plot(self.t, self.x3_spline, '-', color='black')
+
+        ax2 = fig.add_subplot(312)
+        ax2.grid()
+
+        ax2.plot(self.t_points, self.dx1, 'o', label='dq1')
+        ax2.plot(self.t_points, self.dx2, 'o', label='dq2')
+        ax2.plot(self.t_points, self.dx3, 'o', label='dq3')
+
+        ax2.plot(self.t, self.dx1_spline, '-', color='black')
+        ax2.plot(self.t, self.dx2_spline, '-', color='black')
+        ax2.plot(self.t, self.dx3_spline, '-', color='black')
+
+        ax2.legend()
+
+        ax3 = fig.add_subplot(313)
+        ax3.grid()
+        ax3.plot(self.t_points, self.u1, '-', label='u1')
+        ax3.plot(self.t_points, self.u2, '-', label='u2')
+        ax3.legend()
 
         plt.show()
 
-        self.model.visualize(self.x1, self.x2, self.x3, t)
+        self.model.visualize(self.x1_spline.full(), self.x2_spline.full(),
+                             self.x3_spline.full(), self.t, self.k)
 
 
 Problem = NLP()
