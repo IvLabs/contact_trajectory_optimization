@@ -198,7 +198,7 @@ class FingerContact:
         self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, len(t)),
                                            interval=25)  # np.arrange for running in loop so that (i) in animate does not cross the len of x
 
-        self.ani.save('finger_contact_circle.mp4')
+        # self.ani.save('results/finger_contact_circle.mp4')
         plt.show()
 
 
