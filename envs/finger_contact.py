@@ -28,7 +28,7 @@ class FingerContact:
         self.mu = 0.4
         self.dt = 0.1
 
-        self.state = np.array([(180/np.pi)*45, -(180/np.pi)*3, 0]).reshape((3, 1))
+        self.test_state = np.array([(180 / np.pi) * 45, -(180 / np.pi) * 3, 0]).reshape((3, 1))
 
         # self.visualize()
         self.__setPhysics__()
@@ -202,4 +202,4 @@ class FingerContact:
         plt.show()
 
 
-model = FingerContact()
+# model = FingerContact()
