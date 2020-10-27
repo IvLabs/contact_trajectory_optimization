@@ -3,6 +3,7 @@ import casadi as ca
 
 from contact_trajectory_optimization.envs.terrain import Terrain
 
+
 class Hopper:
     def __init__(self):
         super().__init__()
@@ -24,7 +25,50 @@ class Hopper:
 
         self.terrain = Terrain()
 
-        self.__setPhysics__()
+        # self.__setPhysics__()
+        self.__setFrameTransforms__()
+
+    def __setFrameTransforms__(self):
+        """Frame Transformations from world to body and to contact frame
+        b -> base
+        w -> world
+        l -> base link i.e <=> b
+        m -> middle link
+        f -> contact link
+        c -> contact
+        """
+
+        q = ca.SX.sym('q', self.n_joints, 1)
+        x_base = ca.SX.sym('x_base', 2, 1)
+
+        world_frame_pos = ca.SX([0, 0])
+        world_frame_ori = ca.SX([0, 0])
+
+        body_frame_pos = x_base
+        body_frame_ori = q[0]
+
+        b_R_w = ca.SX.zeros(2, 2)
+        b_R_w[0,0], b_R_w[0,1] = ca.cos(ca.pi/2 - q[0]),-ca.sin(ca.pi/2 - q[0])
+        b_R_w[1,0], b_R_w[1,1] = ca.sin(ca.pi/2 - q[0]), ca.cos(ca.pi/2 - q[0])
+
+        w_D_b = body_frame_pos - world_frame_pos
+
+        "Joint positions"
+        b_g0 = ca.SX.zeros(2, 1)
+        b_p0 = ca.SX([self.length[0]/2, 0])
+        w_g0 = b_g0 + w_D_b
+        w_p0 = b_R_w.T @ b_p0 + w_D_b
+
+        b_D_m = ca.SX.zeros(2, 1)
+        b_D_m[0, 0] = self.length[0]/2
+        b_R_m = ca.SX.zeros(2, 2)
+        b_R_m[0,0], b_R_m[0,1] = ca.cos(ca.pi/2 - q[1]),-ca.sin(ca.pi/2 - q[1])
+        b_R_m[1,0], b_R_m[1,1] = ca.sin(ca.pi/2 - q[1]), ca.cos(ca.pi/2 - q[1])
+
+        m_g1 = ca.SX.zeros(2, 1)
+        m_p1 = ca.SX([self.length[0] / 2, 0])
+        w_g0 = m_g1
+        w_p0 = b_R_w.T @ b_p0 + w_D_b
 
     def __setPhysics__(self):
         # Joint State, Base to end effector
@@ -91,8 +135,8 @@ class Hopper:
         G = ca.jacobian(V, q).T
 
         "For B matrix"
-        B = ca.DM([[0, 0],
-                   [1, 0],
+        B = ca.DM([[-1, 0],
+                   [1, -1],
                    [0, 1]])
 
         "For external force"
@@ -111,5 +155,6 @@ class Hopper:
         lam_w = Rot_contact @ lam_c
 
         # print(H)
+
 
 model = Hopper()

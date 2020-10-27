@@ -22,6 +22,7 @@ class NLP:
     def __setOptimizationParams__(self, total_duration, n_steps):
         self.T = total_duration
         self.N = n_steps
+        self.epsilon = 1e-4
 
     def __setVariables__(self):
         if self.var_dt:
@@ -52,7 +53,7 @@ class NLP:
 
     def __setConstraints__(self):
         self.opti.subject_to(self.states[0] == [np.pi/2, -np.pi/1.5, 0])
-        self.opti.subject_to(self.states[-1] == [np.pi/2, -np.pi/1.5, np.pi/2])
+        self.opti.subject_to(self.states[-1][-1] == np.pi/2)
         self.opti.subject_to(self.dstates[0] == [0]*3)
         self.opti.subject_to(self.dstates[-1] == [0]*3)
 
@@ -104,16 +105,17 @@ class NLP:
             self.opti.subject_to(gam_1 + psi_1 >= 0)
             self.opti.subject_to(gam_1 - psi_1 >= 0)
 
-            self.opti.subject_to(f_1['phi'].T @ lam_1_z == 0)
-            # self.opti.subject_to(f_1['phi'].T @ lam_1_z <= 0)
+            self.opti.subject_to(f_1['phi'].T @ lam_1_z <= self.epsilon)
+            self.opti.subject_to(f_1['phi'].T @ lam_1_z >= -self.epsilon)
 
-            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z == 0)
+            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z <= self.epsilon)
+            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z >= -self.epsilon)
 
-            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp <= 0)
-            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp >= 0)
+            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp <= self.epsilon)
+            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp >= -self.epsilon)
 
-            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm == 0)
-            # self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm >= 0)
+            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm <= self.epsilon)
+            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm >= -self.epsilon)
 
             # bounds model specific
             # self.opti.bounded([-np.pi]*3, q_1, [np.pi]*3)
