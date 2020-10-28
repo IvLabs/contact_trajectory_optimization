@@ -10,6 +10,16 @@ from matplotlib import animation
 
 class FingerContact:
     def __init__(self):
+        """
+        The agent considered is a 2 dof manipulator with a free circular object, modelled
+        in the sagittal plane. It consists of a link 1, link 2, free circular object
+        and actuated joints at the link 1 and link 2.
+        The generalized coordinates q and joint torques u are
+        q = [q_1 , q_2 , q_3] ,
+        u = [u_H , u_K ]
+        where q_i is a joint angle, and u_i is the corresponding joint torque
+        """
+
         super().__init__()
         self.render = False
         self.n_joints = 3
