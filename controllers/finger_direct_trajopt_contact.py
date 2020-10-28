@@ -11,7 +11,7 @@ class NLP:
     def __init__(self):
         super().__init__()
         self.model = FingerContact()
-        self.__setOptimizationParams__(total_duration=2, n_steps=20)
+        self.__setOptimizationParams__(total_duration=2, n_steps=20, epsilon=1e-4)
 
         self.opti = ca.Opti()
         self.var_dt = True
@@ -19,10 +19,10 @@ class NLP:
         self.__setConstraints__()
         self.__setCosts__()
 
-    def __setOptimizationParams__(self, total_duration, n_steps):
+    def __setOptimizationParams__(self, total_duration, n_steps, epsilon):
         self.T = total_duration
         self.N = n_steps
-        self.epsilon = 1e-4
+        self.epsilon = epsilon
 
     def __setVariables__(self):
         if self.var_dt:
