@@ -42,6 +42,8 @@ class Hopper:
 
         self.terrain = Terrain()
 
+        self.dt = 0.1
+
         self.__setPhysics__()
         # self.__setFrameTransforms__()
 
