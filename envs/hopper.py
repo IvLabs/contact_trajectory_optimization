@@ -15,10 +15,10 @@ class Hopper:
         shank and actuated joints at the hip (H) and knee (K).
         Base is a block whose orientation is fixed.
         The generalized coordinates q and joint torques u are
-        q = [x_B , z_B , q_H , q_K ] ,
-        u = [u_H , u_K ]
+        q = [x_B, z_B, theta_H, theta_K] ,
+        u = [u_H, u_K]
         where x_i is a horizontal position, z_i is a vertical position,
-        q_i is a joint angle, and u_i is the corresponding joint torque
+        theta_i is a joint angle, and u_i is the corresponding joint torque
         """
 
         super().__init__()
@@ -27,145 +27,72 @@ class Hopper:
         self.n_contact = 1
         self.dof = 2
         self.dims = 2
+        self.n_generalized = self.n_joints + self.dims
 
         self.name = 'hopper'
 
-        self.length = np.array([0.75, 0.75, 0.75]).reshape(3, 1)  # Base to end effector
+        self.length = np.array([[0.25, 0.25],
+                                [0.75, 0],
+                                [0.75, 0]]).reshape(3, 2)  # Base to end effector
         self.mass = np.array([20., 1., 1.]).reshape(3, 1)  # Base to end effector
 
-        self.origin_frame = np.zeros((2, 1))
+        self.inertia = self.mass * np.sum(self.length ** 2, axis=1).reshape(3, 1) / 12
 
-        self.inertia = self.mass * (self.length ** 2) / 12
         self.gravity = 9.81
-        self.num_ee  = 1
-        self.name    = 'hopper'
-        self.length  = np.array([0.75,0.75,0.75])
-        self.mass    = np.array([1,1,20])
-
-        # self.i_qcom  = np.zeros((1,1))
-        # self.f_qcom  = np.zeros((1,1))
-
-        self.inertia = self.mass * (self.length**2)/4
-        self.gravity = 10
-
-        self.mcom = np.sum(self.mass)
-        print(self.mcom)
-        self.icom = self.mcom * (self.length[-1]**2 + 0.1**2)/12
-        print(self.icom)
-
-        self.gravity_vector = ca.DM.zeros(2)
-        self.gravity_vector[1,0] = self.gravity
 
         self.terrain = Terrain()
 
-        self.b = ca.DM([3*(self.length[0]),2*(self.length[0])])
-        self.nominal_pe = ca.DM([0, 2.5*(self.length[0])])
-
-        # self.__setPhysics__()
+        self.__setPhysics__()
         # self.__setFrameTransforms__()
 
     def crossProduct2D(self, a, b):
         return (a[0] * b[1]) - (b[0] * a[1])
 
     def __setPhysics__(self):
-        q = ca.SX.sym('q', 1, 1)
-        r = ca.SX.sym('r', 2, 1)
-        pe = ca.SX.sym('pe', 2, 1)
-        lam = ca.SX.sym('lam', 3, 1)
+        # Generalized Coordinates, q = [x_B, z_B, theta_H, theta_K]
+        q = ca.SX.sym('q', self.n_generalized, 1)
+        dq = ca.SX.sym('dq', self.n_generalized, 1)
+        ddq = ca.SX.sym('ddq', self.n_generalized, 1)
 
-        R_q = ca.SX.zeros(2, 2)
-        R_q[0, 0], R_q[0, 1] = ca.cos(q), -ca.sin(q)
-        R_q[1, 0], R_q[1, 1] = ca.sin(q), ca.cos(q)
-
-        y = ca.fabs(R_q @ (pe - r) - (R_q @ r - self.nominal_pe))
-
-        self.kinematic_model = ca.Function('FullKinematics', [r, q, pe],
-                                           [R_q, y],
-                                           ['r', 'q', 'pe'],
-                                           ['Rotation', 'constraint'])
-
-        theta_contact = ca.acos(ca.dot(self.terrain.heightMapNormalVector(pe[0, -1]), ca.DM([0, 1])))
-        # rotate lambda force represented in contact frame to world frame
-        Rot_contact = ca.SX.zeros(2, 2)
-        Rot_contact[0, 0], Rot_contact[0, 1] = ca.cos(theta_contact), ca.sin(theta_contact)
-        Rot_contact[1, 0], Rot_contact[1, 1] = -ca.sin(theta_contact), ca.cos(theta_contact)
-        lam_c = ca.SX.zeros(2, 1)
-        lam_c[0, 0], lam_c[1, 0] = lam[0, 0] - lam[1, 0], lam[2, 0]
-        lam_w = Rot_contact @ lam_c
-
-        mcom = self.mcom
-        g = self.gravity_vector
-        icom = self.icom
-
-        r_ddot = (lam_w - mcom * g) / mcom
-        q_ddot = (self.crossProduct2D(lam_w, r - pe) / icom)
-
-        pe_terrain = ca.SX.zeros(2, 1)
-        pe_terrain[0, 0] = pe[0, -1]
-        pe_terrain[1, 0] = self.terrain.heightMap(pe[0, -1])
-        phi = pe[1, -1] - pe_terrain[1, 0]
-
-        self.dynamic_model = ca.Function('CenteroidalDynamics', [r, pe, lam],
-                                         [r_ddot, q_ddot, phi],
-                                         ['r', 'pe', 'f'],
-                                         ['r_ddot', 'q_dot', 'phi'])
-
-    def set(self):
-        # Joint State, Base to end effector
-        q = ca.SX.sym('q', self.n_joints, 1)
-        dq = ca.SX.sym('dq', self.n_joints, 1)
-        ddq = ca.SX.sym('ddq', self.n_joints, 1)
-
-        # Inputs and external force
+        # Inputs and external force, u = [u_H, u_K]
         u = ca.SX.sym('u', self.dof, 1)
         lam = ca.SX.sym('lambda', 3, self.n_contact)
 
-        # Base state
-        x_base = ca.SX.sym('x_base', 2, 1)
-        dx_base = ca.SX.sym('dx_base', 2, 1)
-        ddx_base = ca.SX.sym('ddx_base', 2, 1)
-
         """Hopper Dynamics"""
 
-        "End Effector pos"
-        pe = ca.SX.zeros(3, self.n_joints)
-        pe[0, 0], pe[1, 0] = x_base[0] + (self.length[0]/2) * ca.sin(q[0]), x_base[1] - (self.length[1]/2) * ca.cos(q[0])
-        pe[0, 1], pe[1, 1] = pe[0, 0] + self.length[1] * ca.sin(ca.sum1(q[0:2])), pe[1, 0] - self.length[1] * ca.cos(ca.sum1(q[0:2]))
-        pe[0, 2], pe[1, 2] = pe[0, 1] + self.length[2] * ca.sin(ca.sum1(q)), pe[1, 1] - self.length[2] * ca.cos(ca.sum1(q))
+        "Joint positions from Base to end effector"
+        p = ca.SX.zeros(2, self.n_joints)
+        p[0, 0], p[1, 0] = q[0] + (self.length[1, 0]) * ca.sin(q[2]), q[1] - (self.length[1, 0]) * ca.cos(q[2])
+        p[0, 1], p[1, 1] = p[0, 0] + self.length[2, 0] * ca.sin(q[2] + q[3]), p[1, 0] - self.length[2, 0] * ca.cos(q[2] + q[3])
 
         # COG
-        g = ca.SX.zeros(3, self.n_joints)
-        g[0, 0], g[1, 0] = x_base[0], x_base[1]
-        g[0, 1], g[1, 1] = pe[0, 0] + (self.length[1]/2) * ca.sin(ca.sum1(q[0:2])), pe[1, 0] - (self.length[1]/2) * ca.cos(ca.sum1(q[0:2]))
-        g[0, 2], g[1, 2] = pe[0, 1] + (self.length[2]/2) * ca.sin(ca.sum1(q)), pe[1, 1] - (self.length[2]/2) * ca.cos(ca.sum1(q))
+        g = ca.SX.zeros(2, self.n_joints + 1)
+        g[0, 0], g[1, 0] = q[0], q[1]
+        g[0, 1], g[1, 1] = p[0, 0]/2, p[1, 0]/2
+        g[0, 2], g[1, 2] = p[0, 0] + (self.length[2, 0]/2) * ca.sin(q[2] + q[3]), p[1, 0] - (self.length[2, 0]/2) * ca.cos(q[2] + q[3])
 
-        a = ca.SX.zeros(3, self.n_joints)
-        temp = ca.DM.ones(ca.Sparsity.lower(3))
-        a[2, :] = (temp @ q).T
+        a = (ca.DM.ones(ca.Sparsity.lower(2)) @ q[2:4]).T
 
-        J_ee = ca.jacobian(pe[:, 2], q)
+        J_ee = ca.jacobian(p[:, -1], q)
 
         "For inertia matrix"
-        H = ca.SX.zeros(self.n_joints, self.n_joints)
+        H = ca.SX.zeros(self.n_generalized, self.n_generalized)
 
         for i in range(self.dof):
-            J_l = ca.jacobian(pe[:, i], q)
+            J_l = ca.jacobian(p[:, i], q)
             J_a = ca.jacobian(a[:, i], q)
-            # print(J_l.shape)
-            # print('------------')
-            # print(J_a.shape)
 
-            I = ca.SX.zeros(3, 3)
-            I[2, 2] = (1 / 12) * self.mass[i] * self.length[i] ** 2  # Rod
+            I = (1 / 12) * self.mass[i] * (self.length[i, 0] ** 2)  # Rod
+            M = self.mass[i]
 
-            H += self.mass[i] * J_l.T @ J_l + J_a.T @ I @ J_a
+            H += M * J_l.T @ J_l + I * J_a.T @ J_a
 
         "For coriolis + centrifugal matrix"
-        C = ca.SX.zeros(self.n_joints, self.n_joints)
-        for i in range(self.n_joints):
-            for j in range(self.n_joints):
+        C = ca.SX.zeros(self.n_generalized, self.n_generalized)
+        for i in range(self.n_generalized):
+            for j in range(self.n_generalized):
                 sum_ = 0
-                for k in range(self.n_joints):
+                for k in range(self.n_generalized):
                     c_ijk = ca.jacobian(H[i, j], q[k]) - (1/2)*ca.jacobian(H[j, k], q[i])
                     sum_ += c_ijk @ dq[j] @ dq[k]
                 C[i, j] = sum_
@@ -175,32 +102,82 @@ class Hopper:
         G = ca.jacobian(V, q).T
 
         "For B matrix"
-        B = ca.DM([[-1, 0],
-                   [1, -1],
-                   [0, 1]])
+        B = ca.DM([[0., 0.],
+                   [0., 0.],
+                   [1., -1],
+                   [0., 1.]])
 
         "For external force"
         pe_terrain = ca.SX.zeros(2, 1)
-        pe_terrain[0, 0] = pe[0, -1]
-        pe_terrain[1, 0] = self.terrain.heightMap(pe[0, -1])
-        phi = pe[1, -1] - pe_terrain[1, 0]
+        pe_terrain[0, 0] = p[0, -1]
+        pe_terrain[1, 0] = self.terrain.heightMap(p[0, -1])
+        phi = p[:, -1] - pe_terrain
 
-        theta_contact = ca.acos(ca.dot(self.terrain.heightMapNormalVector(pe[0, -1]), ca.DM([0, 1])))
+        B_J_C = ca.jacobian(phi, q)
+
+        theta_contact = ca.acos(ca.dot(self.terrain.heightMapNormalVector(p[0, -1]), ca.DM([0, 1])))
         # rotate lambda force represented in contact frame to world frame
-        Rot_contact = ca.SX.zeros(2, 2)
-        Rot_contact[0, 0], Rot_contact[0, 1] = ca.cos(theta_contact), ca.sin(theta_contact)
-        Rot_contact[1, 0], Rot_contact[1, 1] = -ca.sin(theta_contact), ca.cos(theta_contact)
-        lam_c = ca.SX.zeros(2, 1)
-        lam_c[0, 0], lam_c[1, 0] = lam[0, 0] - lam[1, 0], lam[2, 0]
-        lam_w = Rot_contact @ lam_c
+        B_Rot_C = ca.SX.zeros(2, 2)
+        B_Rot_C[0, 0], B_Rot_C[0, 1] = ca.cos(theta_contact), ca.sin(theta_contact)
+        B_Rot_C[1, 0], B_Rot_C[1, 1] = -ca.sin(theta_contact), ca.cos(theta_contact)
+        C_lam = ca.SX.zeros(2, 1)
+        C_lam[0, 0], C_lam[1, 0] = lam[0, 0] - lam[1, 0], lam[2, 0]
+        B_lam = B_Rot_C @ C_lam
 
+        dp = J_ee @ dq
+        psi = ca.dot(self.terrain.heightMapTangentVector(pe_terrain[0, 0]), dp[:, -1])
 
-        # print(H)
-
+        self.dynamics = ca.Function('Dynamics', [q, dq, u, lam],
+                            [H, C, B, G, phi, J_ee, C_lam, B_lam, psi],
+                            ['q', 'dq', 'u', 'lam'],
+                            ['H', 'C', 'B', 'G', 'phi', 'J_ee', 'C_lam', 'B_lam', 'psi'])
 
 
 model = Hopper()
 
+# def __setPhysics__(self):
+#     q = ca.SX.sym('q', 1, 1)
+#     r = ca.SX.sym('r', 2, 1)
+#     pe = ca.SX.sym('pe', 2, 1)
+#     lam = ca.SX.sym('lam', 3, 1)
+#
+#     R_q = ca.SX.zeros(2, 2)
+#     R_q[0, 0], R_q[0, 1] = ca.cos(q), -ca.sin(q)
+#     R_q[1, 0], R_q[1, 1] = ca.sin(q), ca.cos(q)
+#
+#     y = ca.fabs(R_q @ (pe - r) - (R_q @ r - self.nominal_pe))
+#
+#     self.kinematic_model = ca.Function('FullKinematics', [r, q, pe],
+#                                        [R_q, y],
+#                                        ['r', 'q', 'pe'],
+#                                        ['Rotation', 'constraint'])
+#
+#     theta_contact = ca.acos(ca.dot(self.terrain.heightMapNormalVector(pe[0, -1]), ca.DM([0, 1])))
+#     # rotate lambda force represented in contact frame to world frame
+#     Rot_contact = ca.SX.zeros(2, 2)
+#     Rot_contact[0, 0], Rot_contact[0, 1] = ca.cos(theta_contact), ca.sin(theta_contact)
+#     Rot_contact[1, 0], Rot_contact[1, 1] = -ca.sin(theta_contact), ca.cos(theta_contact)
+#     lam_c = ca.SX.zeros(2, 1)
+#     lam_c[0, 0], lam_c[1, 0] = lam[0, 0] - lam[1, 0], lam[2, 0]
+#     lam_w = Rot_contact @ lam_c
+#
+#     mcom = self.mcom
+#     g = self.gravity_vector
+#     icom = self.icom
+#
+#     r_ddot = (lam_w - mcom * g) / mcom
+#     q_ddot = (self.crossProduct2D(lam_w, r - pe) / icom)
+#
+#     pe_terrain = ca.SX.zeros(2, 1)
+#     pe_terrain[0, 0] = pe[0, -1]
+#     pe_terrain[1, 0] = self.terrain.heightMap(pe[0, -1])
+#     phi = pe[1, -1] - pe_terrain[1, 0]
+#
+#     self.dynamic_model = ca.Function('CenteroidalDynamics', [r, pe, lam],
+#                                      [r_ddot, q_ddot, phi],
+#                                      ['r', 'pe', 'f'],
+#                                      ['r_ddot', 'q_dot', 'phi'])
+#
 # class Hopper:
 #     def __init__(self):
 #         super().__init__()
