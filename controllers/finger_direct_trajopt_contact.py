@@ -174,7 +174,11 @@ class NLP:
                 self.u1.append(self.opti.debug.value(self.actions[i][0]))
                 self.u2.append(self.opti.debug.value(self.actions[i][1]))
         else:
-            self.dt = self.solution.value(self.h)
+            if self.var_dt:
+                self.dt = self.solution.value(self.h)
+            else:
+                self.dt = self.h
+
             for i in range(self.N):
                 self.x1.append(self.solution.value(self.states[i][0]))
                 self.x2.append(self.solution.value(self.states[i][1]))
