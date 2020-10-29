@@ -95,9 +95,9 @@ class Hopper:
             for j in range(self.n_generalized):
                 sum_ = 0
                 for k in range(self.n_generalized):
-                    c_ijk = ca.jacobian(H[i, j], q[k]) - (1/2)*ca.jacobian(H[j, k], q[i])
-                    sum_ += c_ijk @ dq[j] @ dq[k]
-                C[i, j] = sum_
+                    c_ijk = ca.jacobian(H[i, j], q[k]) + ca.jacobian(H[i, j], q[j]) - ca.jacobian(H[k, j], q[i])
+                    sum_ += c_ijk @ dq[k]
+                C[i, j] = (1/2) * sum_
 
         "For G matrix"
         V = self.gravity * ca.sum1(self.mass * g[1, :].T)
@@ -130,12 +130,12 @@ class Hopper:
         psi = ca.dot(self.terrain.heightMapTangentVector(pe_terrain[0, 0]), dp[:, -1])
 
         self.dynamics = ca.Function('Dynamics', [q, dq, u, lam],
-                            [H, C, B, G, phi, J_ee, C_lam, B_lam, psi],
+                            [H, C, B, G, phi, J_ee, B_J_C, C_lam, B_lam, psi],
                             ['q', 'dq', 'u', 'lam'],
-                            ['H', 'C', 'B', 'G', 'phi', 'J_ee', 'C_lam', 'B_lam', 'psi'])
+                            ['H', 'C', 'B', 'G', 'phi', 'J_ee', 'B_J_C', 'C_lam', 'B_lam', 'psi'])
 
 
-model = Hopper()
+# model = Hopper()
 
 # def __setPhysics__(self):
 #     q = ca.SX.sym('q', 1, 1)

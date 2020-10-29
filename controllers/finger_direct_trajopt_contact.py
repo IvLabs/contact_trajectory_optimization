@@ -162,7 +162,7 @@ class NLP:
             else:
                 self.dt = self.h
 
-            for i in range(len(self.t)):
+            for i in range(self.N):
                 self.x1.append(self.opti.debug.value(self.states[i][0]))
                 self.x2.append(self.opti.debug.value(self.states[i][1]))
                 self.x3.append(self.opti.debug.value(self.states[i][2]))
