@@ -11,7 +11,7 @@ class NLP:
     def __init__(self):
         super().__init__()
         self.model = Hopper()
-        self.__setOptimizationParams__(total_duration=0.2, n_steps=8, epsilon=0.)
+        self.__setOptimizationParams__(total_duration=0.8, epsilon=0.)
 
         self.opti = ca.Opti()
         self.var_dt = False
@@ -20,9 +20,8 @@ class NLP:
         self.__setConstraints__()
         self.__setCosts__()
 
-    def __setOptimizationParams__(self, total_duration, n_steps, epsilon):
+    def __setOptimizationParams__(self, total_duration, epsilon):
         self.T = total_duration
-        self.N = n_steps
         self.epsilon = epsilon
 
     def __setVariables__(self):
@@ -32,7 +31,8 @@ class NLP:
             # self.opti.subject_to(ca.sum1(self.h) == self.T / self.N)
             self.opti.set_initial(self.h, 0.05)
         else:
-            self.h = 0.05
+            self.h = 0.075
+            self.N = int(self.T / self.h)
 
         # self.states = []
         # self.dstates = []
@@ -52,21 +52,31 @@ class NLP:
         self.actions = self.opti.variable(self.model.dof, self.N)
         self.forces, self.gammas = self.opti.variable(3, self.N), self.opti.variable(1, self.N)
 
-        # self.start_state = ca.DM([0, (self.model.length[1, 0] * np.cos(np.pi/3) +
-        #                           self.model.length[2, 0]) * np.cos(np.pi/3), -np.pi/3, 2*np.pi/3])
+        # self.start_state = ca.DM([0, (self.model.length[1, 0] * np.cos(np.pi/6) +
+        #                           self.model.length[2, 0]) * np.cos(np.pi/6), -np.pi/6, np.pi/6])
         #
-        # self.end_state = ca.DM([2, (self.model.length[1, 0] * np.cos(np.pi/3) +
-        #                           self.model.length[2, 0]) * np.cos(np.pi/3), -np.pi/3, 2*np.pi/3])
+        # self.end_state = ca.DM([2, (self.model.length[1, 0] * np.cos(np.pi/6) +
+        #                           self.model.length[2, 0]) * np.cos(np.pi/6), -np.pi/6, np.pi/6])
+
+        # self.start_state = ca.DM([0, (self.model.length[1, 0] +
+        #                           self.model.length[2, 0]), 0, 0])
+        #
+        # self.end_state = ca.DM([2, (self.model.length[1, 0] +
+        #                           self.model.length[2, 0]), 0, 0])
 
         self.start_state = ca.DM([0, (self.model.length[1, 0] +
-                                  self.model.length[2, 0]), 0, 0])
+                                  self.model.length[2, 0]) * 0.7])
 
         self.end_state = ca.DM([4, (self.model.length[1, 0] +
-                                  self.model.length[2, 0]), 0, 0])
+                                  self.model.length[2, 0]) * 0.7])
+
 
     def __setConstraints__(self):
-        self.opti.subject_to(self.states[:, 0] == self.start_state)
-        self.opti.subject_to(self.states[:, -1] == self.end_state)
+        # self.opti.subject_to(self.states[:, 0] == self.start_state)
+        # self.opti.subject_to(self.states[:, -1] == self.end_state)
+        self.opti.subject_to(self.states[0:2, 0] == self.start_state)
+        self.opti.subject_to(self.states[0:2, -1] == self.end_state)
+
         self.opti.subject_to(self.dstates[:, 0] == [0] * self.model.n_generalized)
         self.opti.subject_to(self.dstates[:, -1] == [0] * self.model.n_generalized)
 
@@ -78,8 +88,21 @@ class NLP:
             lam_1, lam_2 = self.forces[:, k], self.forces[:, k + 1]
 
             k_1 = self.model.kinematics(q=q_1)
-            # self.opti.subject_to(k_1['p'][0, 0] >= self.start_state[0])
-            # self.opti.subject_to(k_1['p'][0, 0] <= self.end_state[0])
+            k_2 = self.model.kinematics(q=q_2)
+
+            self.opti.subject_to(k_1['p'][1, 1] >= self.model.terrain.heightMap(k_1['p'][0, 1]))
+            self.opti.subject_to(k_1['p'][1, 0] >= k_1['p'][1, 1])
+            self.opti.subject_to(k_1['p'][0, 1] <= q_1[0])
+
+            # if k == self.N/2:
+            #     self.opti.subject_to(k_1['p'][1, 1] >= self.model.length[1, 0])
+
+            if k == 0:
+                self.opti.subject_to(k_1['p'][1, 1] == self.model.terrain.heightMap(k_1['p'][0, 1]))
+            if k == self.N-2:
+                self.opti.subject_to(k_2['p'][1, 1] == self.model.terrain.heightMap(k_2['p'][0, 1]))
+
+            # self.opti.subject_to(k_1['p'][0, 1] <= q_1[0])
 
             f_1 = self.model.dynamics(q=q_1, dq=dq_1, lam=lam_1)
             f_2 = self.model.dynamics(q=q_2, dq=dq_2, lam=lam_2)
@@ -88,7 +111,7 @@ class NLP:
 
             self.opti.subject_to(q_1 - q_2 + h * dq_2 == 0)
             self.opti.subject_to(f_2['H'] @ (dq_2 - dq_1) -
-                                 h * (f_2['C'] @ dq_2 + f_2['G'] - f_2['B'] @ u_2 - f_2['J_ee'].T @ f_2['B_lam']) == 0)
+                                 h * (f_2['C'] @ dq_2 + f_2['G'] - f_2['B'] @ u_2 - f_2['B_J_C'].T @ f_2['B_lam']) == 0)
 
             # friction constraints
 
@@ -117,14 +140,23 @@ class NLP:
             # self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm <= self.epsilon)
             self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm == 0)
 
-            ########################
-            self.opti.subject_to(self.opti.bounded(self.start_state[0], q_1[0], self.end_state[0]))
-            self.opti.subject_to(self.opti.bounded(-np.pi/2, q_1[2], 0))
-            self.opti.subject_to(self.opti.bounded(0, q_1[3], 2*np.pi/3))
+        ########################
+        self.opti.subject_to(self.opti.bounded(self.start_state[0].full()*ca.MX.ones(1, self.N),
+                                               self.states[0, :],
+                                               self.end_state[0].full()*ca.MX.ones(1, self.N)))
+        self.opti.subject_to(self.opti.bounded((-np.pi/2.5)*ca.MX.ones(1, self.N),
+                                               self.states[2, :],
+                                               ca.MX.zeros(1, self.N)))
+        self.opti.subject_to(self.opti.bounded((np.pi/7)*ca.MX.ones(1, self.N),
+                                               self.states[3, :],
+                                               (2*np.pi/3)*ca.MX.ones(1, self.N)))
+        self.opti.subject_to(self.opti.bounded(-15*ca.MX.ones(2, self.N),
+                                               self.actions,
+                                               15*ca.MX.ones(2, self.N)))
 
     def __setCosts__(self):
-        Q = ca.diag(ca.DM([10, 10, 10, 10]))
-        R = ca.diag(ca.DM([10, 10]))
+        Q = ca.diag(ca.DM([0.1, 0.1, 10, 10]))
+        R = ca.diag(ca.DM([100, 100]))
         cost = 0
         for k in range(self.N):
             q, dq = self.states[:, k], self.dstates[:, k]

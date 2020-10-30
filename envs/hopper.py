@@ -36,7 +36,7 @@ class Hopper:
         self.length = np.array([[0.25, 0.25],
                                 [0.75, 0],
                                 [0.75, 0]]).reshape(3, 2)  # Base to end effector
-        self.mass = np.array([20., 1., 1.]).reshape(3, 1)  # Base to end effector
+        self.mass = np.array([2., 1., 1.]).reshape(3, 1)  # Base to end effector
 
         self.inertia = self.mass * np.sum(self.length ** 2, axis=1).reshape(3, 1) / 12
 
@@ -75,7 +75,11 @@ class Hopper:
         g[0, 1], g[1, 1] = p[0, 0]/2, p[1, 0]/2
         g[0, 2], g[1, 2] = p[0, 0] + (self.length[2, 0]/2) * ca.sin(q[2] + q[3]), p[1, 0] - (self.length[2, 0]/2) * ca.cos(q[2] + q[3])
 
-        a = (ca.DM.ones(ca.Sparsity.lower(2)) @ q[2:4]).T
+        J_ang = ca.DM([[0, 0, 0, 0],
+                       [0, 0, 0, 0],
+                       [0, 0, 1., 0],
+                       [0, 0, 1., 1.]])
+        a = (J_ang @ q).T
 
         J_ee = ca.jacobian(p[:, -1], q)
 
@@ -100,6 +104,11 @@ class Hopper:
                     c_ijk = ca.jacobian(H[i, j], q[k]) + ca.jacobian(H[i, j], q[j]) - ca.jacobian(H[k, j], q[i])
                     sum_ += c_ijk @ dq[k]
                 C[i, j] = (1/2) * sum_
+                # sum_ = 0
+                # for k in range(self.dof):
+                #     c_ijk = ca.jacobian(H[i, j], q[k]) - (1/2)*ca.jacobian(H[j, k], q[i])
+                #     sum_ += c_ijk @ dq[j] @ dq[k]
+                # C[i, j] = sum_
 
         "For G matrix"
         V = self.gravity * ca.sum1(self.mass * g[1, :].T)
@@ -108,7 +117,7 @@ class Hopper:
         "For B matrix"
         B = ca.DM([[0., 0.],
                    [0., 0.],
-                   [1., -1],
+                   [1., 0.],
                    [0., 1.]])
 
         "For external force"
@@ -129,7 +138,9 @@ class Hopper:
         B_lam = B_Rot_C @ C_lam
 
         dp = J_ee @ dq
-        psi = ca.dot(self.terrain.heightMapTangentVector(pe_terrain[0, 0]), dp[:, -1])
+        # print(dp.shape)
+        psi = ca.dot(self.terrain.heightMapTangentVector(pe_terrain[0, 0]), dp)
+        # psi = dp[0, 0]
 
         self.kinematics = ca.Function('Kinematics', [q], [p, g], ['q'], ['p', 'g'])
 
@@ -185,7 +196,7 @@ class Hopper:
         self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, len(t)),
                                            interval=25)  # np.arrange for running in loop so that (i) in animate does not cross the len of x
 
-        # self.ani.save('results/finger_contact_circle.mp4')
+        # self.ani.save('results/hopper.mp4')
         plt.show()
 
 # model = Hopper()
