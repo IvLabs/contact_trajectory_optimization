@@ -61,7 +61,7 @@ class NLP:
         self.start_state = ca.DM([0, (self.model.length[1, 0] +
                                   self.model.length[2, 0]), 0, 0])
 
-        self.end_state = ca.DM([2, (self.model.length[1, 0] +
+        self.end_state = ca.DM([4, (self.model.length[1, 0] +
                                   self.model.length[2, 0]), 0, 0])
 
     def __setConstraints__(self):
@@ -118,9 +118,9 @@ class NLP:
             self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm == 0)
 
             ########################
-            # self.opti.subject_to(self.opti.bounded(self.start_state[0], q_1[0], self.end_state[0]))
-            # self.opti.subject_to(self.opti.bounded(-np.pi/2, q_1[2], 0))
-            # self.opti.subject_to(self.opti.bounded(0, q_1[3], 2*np.pi/3))
+            self.opti.subject_to(self.opti.bounded(self.start_state[0], q_1[0], self.end_state[0]))
+            self.opti.subject_to(self.opti.bounded(-np.pi/2, q_1[2], 0))
+            self.opti.subject_to(self.opti.bounded(0, q_1[3], 2*np.pi/3))
 
     def __setCosts__(self):
         Q = ca.diag(ca.DM([10, 10, 10, 10]))
