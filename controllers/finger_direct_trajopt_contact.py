@@ -108,8 +108,8 @@ class NLP:
             self.opti.subject_to(f_1['phi'].T @ lam_1_z <= self.epsilon)
             self.opti.subject_to(f_1['phi'].T @ lam_1_z >= -self.epsilon)
 
-            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z <= self.epsilon)
-            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z >= -self.epsilon)
+            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ gam_1 <= self.epsilon)
+            self.opti.subject_to((self.model.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ gam_1 >= -self.epsilon)
 
             self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp <= self.epsilon)
             self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp >= -self.epsilon)

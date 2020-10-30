@@ -11,7 +11,7 @@ class NLP:
     def __init__(self):
         super().__init__()
         self.model = Hopper()
-        self.__setOptimizationParams__(total_duration=2, n_steps=20, epsilon=1e-4)
+        self.__setOptimizationParams__(total_duration=0.2, n_steps=8, epsilon=0.)
 
         self.opti = ca.Opti()
         self.var_dt = False
@@ -28,7 +28,7 @@ class NLP:
     def __setVariables__(self):
         if self.var_dt:
             self.h = self.opti.variable(1)
-            self.opti.subject_to(self.opti.bounded(0, self.h, self.model.dt))
+            self.opti.subject_to(self.opti.bounded(0.01, self.h, self.model.dt))
             # self.opti.subject_to(ca.sum1(self.h) == self.T / self.N)
             self.opti.set_initial(self.h, 0.05)
         else:
@@ -52,13 +52,17 @@ class NLP:
         self.actions = self.opti.variable(self.model.dof, self.N)
         self.forces, self.gammas = self.opti.variable(3, self.N), self.opti.variable(1, self.N)
 
-        self.start_state = [0, (self.model.length[1, 0]*np.cos(np.pi/3) +
-                               self.model.length[2, 0]*np.cos(np.pi/1.5)),
-                               np.pi / 3, np.pi / 1.5]
+        # self.start_state = ca.DM([0, (self.model.length[1, 0] * np.cos(np.pi/3) +
+        #                           self.model.length[2, 0]) * np.cos(np.pi/3), -np.pi/3, 2*np.pi/3])
+        #
+        # self.end_state = ca.DM([2, (self.model.length[1, 0] * np.cos(np.pi/3) +
+        #                           self.model.length[2, 0]) * np.cos(np.pi/3), -np.pi/3, 2*np.pi/3])
 
-        self.end_state = ca.DM([2, (self.model.length[1, 0]*np.cos(np.pi/3) +
-                               self.model.length[2, 0]*np.cos(np.pi/1.5)),
-                               np.pi / 3, np.pi / 1.5])
+        self.start_state = ca.DM([0, (self.model.length[1, 0] +
+                                  self.model.length[2, 0]), 0, 0])
+
+        self.end_state = ca.DM([2, (self.model.length[1, 0] +
+                                  self.model.length[2, 0]), 0, 0])
 
     def __setConstraints__(self):
         self.opti.subject_to(self.states[:, 0] == self.start_state)
@@ -73,6 +77,10 @@ class NLP:
 
             lam_1, lam_2 = self.forces[:, k], self.forces[:, k + 1]
 
+            k_1 = self.model.kinematics(q=q_1)
+            # self.opti.subject_to(k_1['p'][0, 0] >= self.start_state[0])
+            # self.opti.subject_to(k_1['p'][0, 0] <= self.end_state[0])
+
             f_1 = self.model.dynamics(q=q_1, dq=dq_1, lam=lam_1)
             f_2 = self.model.dynamics(q=q_2, dq=dq_2, lam=lam_2)
 
@@ -80,7 +88,7 @@ class NLP:
 
             self.opti.subject_to(q_1 - q_2 + h * dq_2 == 0)
             self.opti.subject_to(f_2['H'] @ (dq_2 - dq_1) -
-                                 h * (f_2['C'] @ dq_2 + f_2['G'] - f_2['B'] @ u_2 - f_2['B_J_C'].T @ f_2['B_lam']) == 0)
+                                 h * (f_2['C'] @ dq_2 + f_2['G'] - f_2['B'] @ u_2 - f_2['J_ee'].T @ f_2['B_lam']) == 0)
 
             # friction constraints
 
@@ -97,21 +105,26 @@ class NLP:
             self.opti.subject_to(gam_1 + psi_1 >= 0)
             self.opti.subject_to(gam_1 - psi_1 >= 0)
 
-            self.opti.subject_to(f_1['phi'].T @ lam_1_z <= self.epsilon)
-            self.opti.subject_to(f_1['phi'].T @ lam_1_z >= 0)
+            # self.opti.subject_to(f_1['phi'].T @ lam_1_z <= self.epsilon)
+            self.opti.subject_to(f_1['phi'].T @ lam_1_z == 0)
 
-            self.opti.subject_to((self.model.terrain.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z <= self.epsilon)
-            self.opti.subject_to((self.model.terrain.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z >= -self.epsilon)
+            self.opti.subject_to((self.model.terrain.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ gam_1 == 0)
+            # self.opti.subject_to((self.model.terrain.mu * lam_1_z - lam_1_xp - lam_1_xm).T @ lam_1_z >= -self.epsilon)
 
-            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp <= self.epsilon)
-            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp >= 0)
+            # self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp <= self.epsilon)
+            self.opti.subject_to((gam_1 + psi_1).T @ lam_1_xp == 0)
 
-            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm <= self.epsilon)
-            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm >= 0)
+            # self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm <= self.epsilon)
+            self.opti.subject_to((gam_1 - psi_1).T @ lam_1_xm == 0)
+
+            ########################
+            # self.opti.subject_to(self.opti.bounded(self.start_state[0], q_1[0], self.end_state[0]))
+            # self.opti.subject_to(self.opti.bounded(-np.pi/2, q_1[2], 0))
+            # self.opti.subject_to(self.opti.bounded(0, q_1[3], 2*np.pi/3))
 
     def __setCosts__(self):
-        Q = ca.diag(ca.DM([1, 1, 1, 1]))
-        R = ca.diag(ca.DM([0.1, 0.1]))
+        Q = ca.diag(ca.DM([10, 10, 10, 10]))
+        R = ca.diag(ca.DM([10, 10]))
         cost = 0
         for k in range(self.N):
             q, dq = self.states[:, k], self.dstates[:, k]
@@ -160,7 +173,7 @@ class NLP:
                 self.u_K.append(self.opti.debug.value(self.actions[1, i]))
         else:
             if self.var_dt:
-                self.dt = self.opti.debug.value(self.h)
+                self.dt = self.solution.value(self.h)
             else:
                 self.dt = self.h
 
@@ -178,9 +191,9 @@ class NLP:
                 self.u_H.append(self.solution.value(self.actions[0, i]))
                 self.u_K.append(self.solution.value(self.actions[1, i]))
 
-        self.k = self.model.dt/4
-        self.t = np.linspace(0, self.T, int(self.T / self.k))
-
+        self.k = self.model.dt/8
+        self.t = np.linspace(0, self.N * self.dt, int(self.N * self.dt / self.k))
+        print(self.dt)
         self.t_points = np.linspace(0, self.N * self.dt, self.N)
 
         x_B_spline_function = ca.interpolant('LUT', 'bspline', [self.t_points], self.x_B)
@@ -212,24 +225,26 @@ class NLP:
 
         ax1.plot(self.t_points, self.x_B, 'o', label='xB')
         ax1.plot(self.t_points, self.z_B, 'o', label='zB')
-        ax1.plot(self.t_points, self.q_H, 'o', label='qH')
-        ax1.plot(self.t_points, self.q_K, 'o', label='qK')
-        ax1.plot(self.t, self.x_B_spline, 'o', label='black')
-        ax1.plot(self.t, self.z_B_spline, 'o', label='black')
-        ax1.plot(self.t, self.q_H_spline, 'o', label='black')
-        ax1.plot(self.t, self.q_K_spline, 'o', label='black')
+        # ax1.plot(self.t_points, self.q_H, 'o', label='qH')
+        # ax1.plot(self.t_points, self.q_K, 'o', label='qK')
+        ax1.plot(self.t, self.x_B_spline, '-', color='black')
+        ax1.plot(self.t, self.z_B_spline, '-', color='black')
+        # ax1.plot(self.t, self.q_H_spline, '-', color='black')
+        # ax1.plot(self.t, self.q_K_spline, '-', color='black')
+
+        ax1.legend()
 
         ax2 = fig.add_subplot(312)
         ax2.grid()
 
-        ax2.plot(self.t_points, self.dx_B, 'o', label='xB')
-        ax2.plot(self.t_points, self.dz_B, 'o', label='zB')
-        ax2.plot(self.t_points, self.dq_H, 'o', label='qH')
-        ax2.plot(self.t_points, self.dq_K, 'o', label='qK')
-        ax2.plot(self.t, self.dx_B_spline, 'o', label='black')
-        ax2.plot(self.t, self.dz_B_spline, 'o', label='black')
-        ax2.plot(self.t, self.dq_H_spline, 'o', label='black')
-        ax2.plot(self.t, self.dq_K_spline, 'o', label='black')
+        ax2.plot(self.t_points, self.dx_B, 'o', label='dxB')
+        ax2.plot(self.t_points, self.dz_B, 'o', label='dzB')
+        # ax2.plot(self.t_points, self.dq_H, 'o', label='dqH')
+        # ax2.plot(self.t_points, self.dq_K, 'o', label='dqK')
+        ax2.plot(self.t, self.dx_B_spline, '-', color='black')
+        ax2.plot(self.t, self.dz_B_spline, '-', color='black')
+        # ax2.plot(self.t, self.dq_H_spline, '-', color='black')
+        # ax2.plot(self.t, self.dq_K_spline, '-', color='black')
 
         ax2.legend()
 
@@ -241,8 +256,8 @@ class NLP:
 
         plt.show()
 
-        # self.model.visualize(self.x1_spline.full(), self.x2_spline.full(),
-        #                      self.x3_spline.full(), self.t, self.k)
+        self.model.visualize(self.x_B_spline.full(), self.z_B_spline.full(),
+                             self.q_H_spline.full(), self.q_K_spline.full(), self.t, self.k)
 
 
 problem = NLP()

@@ -3,7 +3,9 @@
 
 import numpy as np
 import casadi as ca
-
+from matplotlib import pyplot as plt
+from matplotlib import animation
+from matplotlib import patches as pch
 from contact_trajectory_optimization.envs.terrain import Terrain
 
 
@@ -38,7 +40,7 @@ class Hopper:
 
         self.inertia = self.mass * np.sum(self.length ** 2, axis=1).reshape(3, 1) / 12
 
-        self.gravity = 9.81
+        self.gravity = -9.81
 
         self.terrain = Terrain()
 
@@ -129,11 +131,62 @@ class Hopper:
         dp = J_ee @ dq
         psi = ca.dot(self.terrain.heightMapTangentVector(pe_terrain[0, 0]), dp[:, -1])
 
+        self.kinematics = ca.Function('Kinematics', [q], [p, g], ['q'], ['p', 'g'])
+
         self.dynamics = ca.Function('Dynamics', [q, dq, u, lam],
                             [H, C, B, G, phi, J_ee, B_J_C, C_lam, B_lam, psi],
                             ['q', 'dq', 'u', 'lam'],
                             ['H', 'C', 'B', 'G', 'phi', 'J_ee', 'B_J_C', 'C_lam', 'B_lam', 'psi'])
 
+    def visualize(self, x_B, z_B, q_H, q_K, t, dt):
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_xlim([-1, 5])
+        self.ax.set_ylim([-1, 5])
+        self.ax.grid()
+        # print(x_B.shape)
+        time_template = 'time = %.1fs'
+        time_text = self.ax.text(0.05, 0.9, '', transform=self.ax.transAxes)
+
+        base = pch.Rectangle(xy=(x_B[0] - self.length[0]/2, z_B[0] - self.length[0, 1]/2),
+                             width=self.length[0, 0], height=self.length[0, 1], color='grey')
+
+        hip_link, = self.ax.plot([], [], '-', lw=5, color='red')
+        knee_link, = self.ax.plot([], [], '-', lw=5, color='blue')
+        ee, = self.ax.plot([], [], 'o', lw=2, color='blue')
+        terrain, = self.ax.plot([], [], '-', lw=2, color='black')
+        # i = 0
+        # f = self.kinematics(q=ca.DM([x_B[i], z_B[i], q_H[i], q_K[i]]).full())
+        # print(f)
+        # breakpoint()
+        def init():
+            hip_link.set_data([], [])
+            knee_link.set_data([], [])
+            ee.set_data([], [])
+            terrain.set_data([], [])
+            time_text.set_text('')
+            self.ax.add_patch(base)
+            return hip_link, knee_link, ee, terrain, time_text, base,
+
+        def animate(i):
+            f = self.kinematics(q=ca.DM([x_B[i], z_B[i], q_H[i], q_K[i]]).full())
+            f['p'] = f['p'].full()
+            f['g'] = f['g'].full()
+
+            hip_link.set_data([x_B[i], f['p'][0, 0]], [z_B[i], f['p'][1, 0]])
+            knee_link.set_data([f['p'][0, 0], f['p'][0, 1]], [f['p'][1, 0], f['p'][1, 1]])
+            ee.set_data([f['p'][0, 1]]*2, [f['p'][1, 1]]*2)
+            terrain.set_data([-1, 6], [0, 0])
+            time_text.set_text(time_template % (i * dt))
+            base.set_xy([x_B[i] - self.length[0, 0]/2, z_B[i] - self.length[0, 1]/2])
+            self.ax.add_artist(base)
+            return hip_link, knee_link, ee, terrain, time_text, base,
+
+        self.ani = animation.FuncAnimation(self.fig, animate, np.arange(0, len(t)),
+                                           interval=25)  # np.arrange for running in loop so that (i) in animate does not cross the len of x
+
+        # self.ani.save('results/finger_contact_circle.mp4')
+        plt.show()
 
 # model = Hopper()
 
