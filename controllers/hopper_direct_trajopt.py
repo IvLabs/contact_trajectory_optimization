@@ -11,7 +11,7 @@ class NLP:
     def __init__(self):
         super().__init__()
         self.model = Hopper()
-        self.__setOptimizationParams__(total_duration=0.8, epsilon=0.)
+        self.__setOptimizationParams__(total_duration=0.4, epsilon=0.)
 
         self.opti = ca.Opti()
         self.var_dt = False
@@ -31,7 +31,7 @@ class NLP:
             # self.opti.subject_to(ca.sum1(self.h) == self.T / self.N)
             self.opti.set_initial(self.h, 0.05)
         else:
-            self.h = 0.075
+            self.h = 0.05
             self.N = int(self.T / self.h)
 
         # self.states = []
@@ -144,12 +144,12 @@ class NLP:
         self.opti.subject_to(self.opti.bounded(self.start_state[0].full()*ca.MX.ones(1, self.N),
                                                self.states[0, :],
                                                self.end_state[0].full()*ca.MX.ones(1, self.N)))
-        self.opti.subject_to(self.opti.bounded((-np.pi/2.5)*ca.MX.ones(1, self.N),
-                                               self.states[2, :],
-                                               ca.MX.zeros(1, self.N)))
-        self.opti.subject_to(self.opti.bounded((np.pi/7)*ca.MX.ones(1, self.N),
-                                               self.states[3, :],
-                                               (2*np.pi/3)*ca.MX.ones(1, self.N)))
+        # self.opti.subject_to(self.opti.bounded((-np.pi/2.5)*ca.MX.ones(1, self.N),
+        #                                        self.states[2, :],
+        #                                        ca.MX.zeros(1, self.N)))
+        # self.opti.subject_to(self.opti.bounded((np.pi/7)*ca.MX.ones(1, self.N),
+        #                                        self.states[3, :],
+        #                                        (2*np.pi/3)*ca.MX.ones(1, self.N)))
         self.opti.subject_to(self.opti.bounded(-15*ca.MX.ones(2, self.N),
                                                self.actions,
                                                15*ca.MX.ones(2, self.N)))
@@ -161,8 +161,8 @@ class NLP:
         for k in range(self.N):
             q, dq = self.states[:, k], self.dstates[:, k]
             u = self.actions[:, k]
-            cost += dq.T @ Q @ dq + u.T @ R @ u
-
+            # cost += dq.T @ Q @ dq + u.T @ R @ u
+            cost += (dq[2]*u[0])**2 + (dq[3]*u[1])**2
         self.opti.minimize(cost)
 
     def __solve__(self):
