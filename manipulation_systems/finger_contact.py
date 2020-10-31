@@ -46,7 +46,7 @@ class FingerContact:
     def __setPhysics__(self):
         q = ca.SX.sym('q', self.n_joints, 1)
         dq = ca.SX.sym('dq', self.n_joints, 1)
-        ddq = ca.SX.sym('ddq', self.n_joints, 1)
+        # ddq = ca.SX.sym('ddq', self.n_joints, 1)
         u = ca.SX.sym('u', self.dof, 1)
         lam = ca.SX.sym('lambda', 3, self.n_contact)
 
@@ -130,7 +130,7 @@ class FingerContact:
 
         # For tangential vel @ contact
         normal_vec_contact = Rot_contact.T @ ca.SX.ones(2, 1)
-        tangent_vec_contact = ca.DM([[0, -1], [1, 0]]) @ normal_vec_contact
+        # tangent_vec_contact = ca.DM([[0, -1], [1, 0]]) @ normal_vec_contact
 
         ee_vel_b = J_ee_b @ dq[0:2]
         Rot_q1q2 = ca.SX.zeros(2, 2)
@@ -171,16 +171,6 @@ class FingerContact:
         anchor_circle, = self.ax.plot([], [], '+', lw=1, color='black')
         circle = pch.Circle(xy=self.free_circle['center'], radius=self.free_circle['radius'])
         circle.set_facecolor([0, 1, 0])
-
-        def init():
-            link_1.set_data([], [])
-            link_2.set_data([], [])
-            anchor_arm.set_data([], [])
-            anchor_circle.set_data([], [])
-            finger_tip.set_data([], [])
-            time_text.set_text('')
-            self.ax.add_patch(circle)
-            return link_1, link_2, anchor_arm, anchor_circle, finger_tip, time_text, circle,
 
         def animate(i):
             line1_x = [self.arm['origin'][0], self.arm['origin'][0] + np.sin(x1[i]) * self.arm['length'][0]]

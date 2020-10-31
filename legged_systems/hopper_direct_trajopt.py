@@ -3,9 +3,8 @@
 
 import casadi as ca
 import numpy as np
-from contact_trajectory_optimization.envs.hopper import Hopper
+from hopper import Hopper
 from matplotlib import pyplot as plt
-
 
 class NLP:
     def __init__(self):

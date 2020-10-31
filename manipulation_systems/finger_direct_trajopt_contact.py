@@ -3,7 +3,7 @@
 
 import casadi as ca
 import numpy as np
-from contact_trajectory_optimization.envs.finger_contact import FingerContact
+from finger_contact import FingerContact
 from matplotlib import pyplot as plt
 
 

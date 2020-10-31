@@ -6,8 +6,7 @@ import casadi as ca
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from matplotlib import patches as pch
-from contact_trajectory_optimization.envs.terrain import Terrain
-
+from terrain import Terrain
 
 class Hopper:
     def __init__(self):
@@ -56,7 +55,7 @@ class Hopper:
         # Generalized Coordinates, q = [x_B, z_B, theta_H, theta_K]
         q = ca.SX.sym('q', self.n_generalized, 1)
         dq = ca.SX.sym('dq', self.n_generalized, 1)
-        ddq = ca.SX.sym('ddq', self.n_generalized, 1)
+        # ddq = ca.SX.sym('ddq', self.n_generalized, 1)
 
         # Inputs and external force, u = [u_H, u_K]
         u = ca.SX.sym('u', self.dof, 1)
@@ -170,14 +169,6 @@ class Hopper:
         # f = self.kinematics(q=ca.DM([x_B[i], z_B[i], q_H[i], q_K[i]]).full())
         # print(f)
         # breakpoint()
-        def init():
-            hip_link.set_data([], [])
-            knee_link.set_data([], [])
-            ee.set_data([], [])
-            terrain.set_data([], [])
-            time_text.set_text('')
-            self.ax.add_patch(base)
-            return hip_link, knee_link, ee, terrain, time_text, base,
 
         def animate(i):
             f = self.kinematics(q=ca.DM([x_B[i], z_B[i], q_H[i], q_K[i]]).full())
